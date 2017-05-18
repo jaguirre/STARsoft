@@ -11,7 +11,8 @@ import glob
 #%%
 # [f0	Qr	Qc	Qi	a_nl T_stage	T_BB]
 
-path = '/Users/jaguirre/Documents/STARFIRE/BBscan20170516/'
+path = '/scr/starfire/testdata/CD004/BBscan20170516/'
+figfile = path+'BBscan20170516_fQ_vs_T.png'
 filelist = glob.glob(path+'/multitone/*/fit_results*.csv')
 #%%
 
@@ -66,5 +67,5 @@ for res in np.arange(1,n_resonators):
     
 handles, labels = p1.get_legend_handles_labels()    
 fig.legend(handles,labels)    
-plt.savefig('BBscan20170516.png')
+plt.savefig(figfile)
 fig.show()
