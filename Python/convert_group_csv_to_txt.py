@@ -9,16 +9,33 @@ Created on Tue May 16 23:36:03 2017
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-#%%
-
-testfile='BBScan20170516.csv'
-
-# Get the description of the groups
-descr = pd.read_csv(testfile)
+import os
 
 #%%
+# -------
+# Things the user must set (should eventually come in from the command line or something)
+csvfile = 'BBscan20170516.csv' # Name of your csv file.  Assumed to be in csvpath (defined below)
+testdatapath = '/scr/starfire/testdata/'
+CDlabel = 'CD004'
+devlabel='BBscan20170516' # same devlabel as in process_one_group
+filelabel='BBscan' # The prefix for the .txt files to be generatd.  date and time will be appended
+# --------
+# These are defined from above
+csvpath=testdatapath+CDlabel+'/'
+devpath = csvpath+devlabel+'/'
 
-def write_group_file(grp,CDlabel='CD004',devlabel='BBscan20170516',filelabel=''):
+# Get the description of the groups from the csv file
+descr = pd.read_csv(csvpath+csvfile)
+try:
+    os.system('mkdir '+devpath)
+except:
+    print('Cannot make devlabel directory')
+    stop
+os.system('mv '+csvpath+csvfile+' '+devpath)
+
+#%%
+
+def write_group_file(grp,CDlabel='CD004',devlabel='BBscan20170516',filelabel='',devpath=''):
     # Write the file that describes that group
     # grp is a pandas DataFrame
     
@@ -28,7 +45,7 @@ def write_group_file(grp,CDlabel='CD004',devlabel='BBscan20170516',filelabel='')
     str(grp.loc[grp.type=='stream','time'].values[0])+'.txt'
     #print filename
 
-    f = open(filename,'w')
+    f = open(devpath+filename,'w')
     f.write(CDlabel+'\n')
     f.write(devlabel+'\n')
     types = ['fine','gain','rough','med','stream']
@@ -59,4 +76,4 @@ def write_group_file(grp,CDlabel='CD004',devlabel='BBscan20170516',filelabel='')
 for g in np.arange(1,descr['group'].max()+1):
     # Pick out a group 
     grp = descr.loc[descr.group==g] # pandas way of selecting a subset
-    print write_group_file(grp,filelabel='BBscan')
+    print(write_group_file(grp,CDlabel=CDlabel,devlabel=devlabel,filelabel=filelabel,devpath=devpath))
