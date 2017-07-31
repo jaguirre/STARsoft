@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import pdb
 import warnings
+import csv
 
 import numpy as np
 from scipy.io import readsav
@@ -12,33 +12,61 @@ from matplotlib import pyplot as plt
 #for debugging purposes, treat warnings as exceptions
 warnings.simplefilter('error')
 
-min_freq = 0.1 #Hz
-white_fit_freq = 50 #Hz
-over_f_fit_freq = 1
 
-def flip_freqs(freq_array):
-    split_point = len(freq_array) // 2
-    split_point += 1
-    
-    return np.hstack((freq_array[split_point:], freq_array[:split_point]))
-        
+def noise_fn(freq, log_white_level, exponent, amplitude):
+    #1 over f
+    over_f = amplitude * (freq**exponent)
+    ret_val = over_f + np.exp(log_white_level)
 
-def is_symmetric(array):
-    value_range = len(array) // 2
-    for i in range(value_range):
-        if array[i] != -1 * array[-1 - i]:
-            return False
-
-    return True
+    return ret_val
 
 
-def read_data(file_dict):
-    data = {key:readsav(f_name) for key, f_name in file_dict.items()}
-    data = {key:[data[key][data_key] for data_key in data[key].keys()][0]
-            for key in data.keys()} #readsav returns a 1 item dict
-                    #because...IDL?
+def over_f_starting_guess(freq, sxx):
+    #just drop any invalid values
+    freq = freq[sxx > 0]
+    sxx = sxx[sxx > 0]
+    log_sxx = np.log(sxx)
+    log_freq = np.log(freq)
+    try:
+        exponent, log_amp, _, __, ___ = linregress(log_freq, log_sxx)
+    except (ValueError, RuntimeWarning):
+        #sxx > 0 is null set
+        exponent, log_amp = 0., 0. #hopefully error catching will drop these
+            #later
 
-    return data
+    return exponent, np.exp(log_amp)
+
+
+def fit_data(freq, csd, white_freq, min_freq, over_f_freq):
+    guess_white = csd[freq > white_freq]
+    if len(guess_white[guess_white > 0.]) > 0:
+        guess_white = np.log(np.average(guess_white[guess_white > 0.]))
+    else:
+        guess_white = 0
+    #improve numerical stability
+    scale_factor = np.exp(guess_white)
+    csd /= scale_factor
+    guess_white = 0.
+    guess_exponent, guess_amp = over_f_starting_guess(
+            freq[freq < over_f_freq], csd[freq < over_f_freq])
+    #reset invalid values
+    if (guess_exponent > 0) or np.isnan(guess_amp):
+        guess_exponent = -0.01
+    if (guess_amp < 0) or np.isnan(guess_amp):
+        guess_amp = 0.
+    if len(csd[csd > 0]) == 0:
+        return 0., 0.
+    fit_vals, covariance = curve_fit(noise_fn, freq[freq > min_freq],
+            csd[freq > min_freq], p0=(guess_white, guess_exponent, guess_amp),
+            bounds=((-np.inf, -np.inf, 0.),
+                    (np.inf, 0, np.inf)), max_nfev=2000)
+
+    #rescale back to actual values
+    csd *= scale_factor
+    fit_vals[0] = fit_vals[0] + np.log(scale_factor)
+    fit_vals[2] = fit_vals[2] * scale_factor
+
+    return fit_vals, covariance
 
 
 def get_sxx(sav_data):
@@ -64,7 +92,7 @@ def get_S_par_per(sav_data):
     return sper_freq, sper_csd, spar_freq, spar_csd
 
 
-def amp_noise_comp(sav_data):
+def amp_noise_comp(sav_data, white_freq, min_freq, over_f_freq):
     sper_freq, sper_csd, spar_freq, spar_csd = get_S_par_per(sav_data)
     #pull freqs over the cutoff
     sper_masks = [freq >= min_freq for freq in sper_freq]
@@ -73,41 +101,37 @@ def amp_noise_comp(sav_data):
     sper_csd = [freq[mask] for freq, mask in zip(sper_csd, sper_masks)]
     spar_freq = [freq[mask] for freq, mask in zip(spar_freq, spar_masks)]
     spar_csd = [freq[mask] for freq, mask in zip(spar_csd, spar_masks)]
+    #fit values
+    sper_fit = [fit_data(freq, np.abs(csd), white_freq, min_freq, over_f_freq)[0]
+            for freq, csd in zip(sper_freq, sper_csd)]
+    spar_fit = [fit_data(freq, np.abs(csd), white_freq, min_freq, over_f_freq)[0]
+            for freq, csd in zip(spar_freq, spar_csd)]
     #ratio of per/par
-    ratio = [np.abs(sper_array) / np.abs(spar_array)
-            for sper_array, spar_array in zip(sper_csd, spar_csd)]
+    sper_fit_csd = [noise_fn(freq, *sper_fit_vals)
+            for freq, sper_fit_vals in zip(sper_freq, sper_fit)]
+    spar_fit_csd = [noise_fn(freq, *spar_fit_vals)
+            for freq, spar_fit_vals in zip(spar_freq, spar_fit)]
+    ratio = [sper_array / spar_array
+            for sper_array, spar_array in zip(sper_fit_csd, spar_fit_csd)]
     inv_ratio = [1. - tone_ratio for tone_ratio in ratio]
+    for elem in inv_ratio:
+        elem[elem < 0.] = 0.
+                #zero points will be dropped later
 
     return inv_ratio
 
 
-def noise_fn(freq, log_white_level, exponent, amplitude):
-    #1 over f
-    over_f = amplitude * (freq**exponent)
-    ret_val = over_f + np.exp(log_white_level)
+def read_data(f_name, white_freq, min_freq, over_f_freq):
+    data = readsav(f_name)
+    data = [data[key] for key in data.keys()][0]
+    data_sxx = get_sxx(data)
+    noise_ratio = amp_noise_comp(data, white_freq, min_freq, over_f_freq)
+    frequencies = data_sxx[0]
+    Sxx_list = data_sxx[1]
 
-    return ret_val
-
-
-def log_noise_fn(freq, log_white_level, exponent, amplitude):
-    #1 over f
-    over_f = amplitude * (freq**exponent)
-    ret_val = over_f + np.exp(log_white_level)
-
-    return np.log(ret_val)
+    return frequencies, Sxx_list, noise_ratio
 
 
-def starting_guess(freq, sxx):
-    #just drop any invalid values
-    freq = freq[sxx >= 0]
-    sxx = sxx[sxx >= 0]
-    log_sxx = np.log(sxx)
-    log_freq = np.log(freq)
-    exponent, log_amp, _, __, ___ = linregress(log_freq, log_sxx)
-
-    return exponent, np.exp(log_amp)
-
-    
 def plot_fit(freq, sxx, filename, fit_values):
     binning_num = 10
     def bin_sxx(freq, sxx, bin_num):
@@ -131,69 +155,60 @@ def plot_fit(freq, sxx, filename, fit_values):
     plt.close(fig)
 
     
-def fit_sxx(freq, sxx, temp, res_id):
+def fit_sxx(freq, sxx, white_freq, min_freq, over_f_freq, temp, res_id):
     filename_template = 'fit_plots/temp_{0}_resonator_{1}_Sxx_fit.png'
-    guess_white = sxx[freq > white_fit_freq]
-    guess_white = np.log(np.average(guess_white[guess_white > 0.]))
-    #maybe help numerically to bring things to order unity
-    scale_factor = np.exp(guess_white)
-    sxx /= scale_factor
-    guess_white = 0.
-    guess_exponent, guess_amp = starting_guess(freq[freq < over_f_fit_freq],
-        sxx[freq < over_f_fit_freq])
-    if (guess_exponent > 0) or np.isnan(guess_amp):
-        guess_exponent = -0.01
-    if (guess_amp < 0) or np.isnan(guess_amp):
-        guess_amp = 0.
-    sigma = np.sqrt(1. / freq) #I think that this is the appropriate weighting
-            #since you will have 1/freq amount of cycles averaged
-    fit_vals, _ = curve_fit(noise_fn, freq, sxx, p0=(guess_white,
-            guess_exponent, guess_amp), bounds=((-np.inf, -np.inf, 0.),
-                    (np.inf, 0, np.inf)), max_nfev=2000)
+    fit_vals, _ = fit_data(freq, sxx, white_freq, min_freq, over_f_freq)
     #rescale back to actual values
-    sxx *= scale_factor
-    fit_vals[0] = fit_vals[0] + np.log(scale_factor)
-    fit_vals[2] = fit_vals[2] * scale_factor
     plot_fit(freq, sxx, filename_template.format(temp, res_id), fit_vals)
 
     return fit_vals[0] #currently only looking at the white component
 
 
-def log_fit(freq, sxx, temp, res_id):
-    def log_fit_fn(freq, log_white_level, exponent, amplitude):
-        return np.log(noise_fn(freq, log_white_level, exponent, amplitude))
+def plot_temp_white(temps, white_noise_levels):
+    filename_template = 'noise_vs_temp_resonator_{0}.'
+    for i, resonator in enumerate(white_noise_levels):
+        fig = plt.figure()
+        ax = plt.axes()
+        ax.cla()
+        ax.set_xlabel('Temperature(K)')
+        ax.set_ylabel('White Noise Level(Hz)')
+        #filter out defaulted white values when there were no points to fit
+        plot_temps = [temp for temp, white in zip(temps, resonator)
+                if white != 0. and white < 1e-8]
+        resonator = [white for white in resonator if white != 0. and white < 1e-8]
+        ax.plot(plot_temps, resonator, 'bo-')
+        fig.savefig(filename_template.format(i+1) + 'png', format='png')
+        with open(filename_template.format(i+1) + 'csv', 'w') as f:
+            writer = csv.writer(f)
+            writer.writerow(['#temp', 'Sxx'])
+            for temp, res in zip(plot_temps, resonator):
+                writer.writerow([temp, res])
 
-    sxx = np.abs(sxx)
-    filename_template = 'fit_plots/temp_{0}_resonator_{1}_Sxx_fit.png'
-    guess_white = sxx[freq > white_fit_freq]
-    guess_white = np.log(np.average(guess_white[guess_white > 0.]))
-    #maybe help numerically?
-    scale_factor = np.exp(guess_white)
-    sxx /= scale_factor
-    guess_white = 0.
-    guess_exponent, guess_amp = starting_guess(freq[freq < over_f_fit_freq],
-        sxx[freq < over_f_fit_freq])
-    #sigma = np.sqrt(1. / freq) #I think that this is the appropriate weighting
-            #since you will have 1/freq amount of cycles averaged
-    fit_vals, _ = curve_fit(log_noise_fn, freq, np.log(sxx), p0=(guess_white,
-            guess_exponent, guess_amp), maxfev=2000)
-    sxx *= scale_factor
-    fit_vals[0] = fit_vals[0] + np.log(scale_factor)
-    fit_vals[2] = fit_vals[2] * scale_factor
-    #fit_vals = (guess_white, guess_exponent, guess_amp)
-    plot_fit(freq, sxx, filename_template.format(temp, res_id), fit_vals)
+    colors = ['ro-', 'bo-', 'go-', 'yo-', 'ko-',
+            'r*-', 'b*-', 'g*-', 'y*-', 'k*-',
+            'rx-', 'bx-', 'gx-', 'yx-', 'kx-']
+    fig = plt.figure()
+    ax = plt.axes()
+    ax.cla()
+    ax.set_xlabel('Temperature(K)')
+    ax.set_ylabel('White Noise Level(Hz)')
+    for i, resonator in enumerate(white_noise_levels):
+        #filter out defaulted white values when there were no points to fit
+        plot_temps = [temp for temp, white in zip(temps, resonator)
+                if white != 0. and white < 1e-8]
+        resonator = [white for white in resonator if white != 0. and white < 1e-8]
+        ax.plot(plot_temps, resonator, colors[i])
+        ax.set_yscale('log')
+    fig.savefig('all_resonators.png', format='png')
 
-    return fit_vals[0] #currently only looking at the white component
-
-def temp_data(temp_dict):
-    data = read_data(temp_dict)
-    data_sxx = [(key, get_sxx(temp_data)) for key, temp_data in data.items()]
-    noise_ratio = {key: amp_noise_comp(temp_data)
-            for key, temp_data in data.items()}
-    temperatures = [temp for temp, data in data_sxx]
-    noise_ratio = [noise_ratio[key] for key in temperatures]
-    frequencies = [data[0] for temp, data in data_sxx]
-    Sxx_list = [data[1] for temp, data in data_sxx]
+def temp_data(temp_dict, white_freq, min_freq, over_f_freq):
+    data = [(key, f_name) for key, f_name in temp_dict.items()]
+    temperatures = [data_elem[0] for data_elem in data]
+    data = [read_data(data_elem[1], white_freq, min_freq, over_f_freq)
+            for data_elem in data]
+    frequencies = [data_tuple[0] for data_tuple in data]
+    Sxx_list = [data_tuple[1] for data_tuple in data]
+    noise_ratio = [data_tuple[2] for data_tuple in data]
     #change index order, so freq[resonator][temperature] instead of
     #[temperature][resonator]
     frequencies = [[frequencies[j][i] for j in range(len(frequencies))]
@@ -210,32 +225,16 @@ def temp_data(temp_dict):
             for tone_sxx, tone_masks in zip(Sxx_list, array_masks)]
     Sxx_list = [[elem * ratio for elem, ratio in zip(tone_sxx, tone_ratios)]
             for tone_sxx, tone_ratios in zip(Sxx_list, noise_ratio)]
-    white_noise_levels = [[fit_sxx(freq, sxx, temperatures[j], i+1)
+    white_noise_levels = [[fit_sxx(freq, sxx, white_freq, min_freq,
+            over_f_freq, temperatures[j], i+1)
             for j, (freq, sxx)
             in enumerate(zip(tone_frequencies, tone_Sxx_list))]
             for i, (tone_frequencies, tone_Sxx_list)
             in enumerate(zip(frequencies, Sxx_list))]
-    with open('fit_vals.csv', 'w') as f:
-        import csv
-        writer = csv.writer(f)
-        for resonator in white_noise_levels:
-            writer.writerow(resonator)
 
     white_noise_levels = [[np.exp(value) for value in resonator]
             for resonator in white_noise_levels]
     plot_temp_white(temperatures, white_noise_levels)
-
-
-def plot_temp_white(temps, white_noise_levels):
-    filename_template = 'noise_vs_temp_resonator_{0}.png'
-    for i, resonator in enumerate(white_noise_levels):
-        fig = plt.figure()
-        ax = plt.axes()
-        ax.cla()
-        ax.set_xlabel('Temperature(K)')
-        ax.set_ylabel('White Noise Level(Hz)')
-        ax.plot(temps, resonator)
-        fig.savefig(filename_template.format(i+1), format='png')
 
 
 
