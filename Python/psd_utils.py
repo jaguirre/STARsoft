@@ -55,7 +55,7 @@ def fit_data(freq, csd, white_freq, min_freq, over_f_freq):
     if (guess_amp < 0) or np.isnan(guess_amp):
         guess_amp = 0.
     if len(csd[csd > 0]) == 0:
-        return 0., 0.
+        return np.zeros(3), np.zeros(3)
     fit_vals, covariance = curve_fit(noise_fn, freq[freq > min_freq],
             csd[freq > min_freq], p0=(guess_white, guess_exponent, guess_amp),
             bounds=((-np.inf, -np.inf, 0.),
@@ -158,10 +158,12 @@ def plot_fit(freq, sxx, filename, fit_values):
 def fit_sxx(freq, sxx, white_freq, min_freq, over_f_freq, temp, res_id):
     filename_template = 'fit_plots/temp_{0}_resonator_{1}_Sxx_fit.png'
     fit_vals, _ = fit_data(freq, sxx, white_freq, min_freq, over_f_freq)
-    #rescale back to actual values
-    plot_fit(freq, sxx, filename_template.format(temp, res_id), fit_vals)
+    if fit_vals[0] != 0:
+    	plot_fit(freq, sxx, filename_template.format(temp, res_id), fit_vals)
 
-    return fit_vals[0] #currently only looking at the white component
+    	return fit_vals[0] #currently only looking at the white component
+    else:
+        return np.nan
 
 
 def plot_temp_white(temps, white_noise_levels):
@@ -174,7 +176,7 @@ def plot_temp_white(temps, white_noise_levels):
         ax.set_ylabel('White Noise Level(Hz)')
         #filter out defaulted white values when there were no points to fit
         plot_temps = [temp for temp, white in zip(temps, resonator)
-                if white != 0. and white < 1e-8]
+                if not np.isnan(white) and white != 0. and white < 1e-8]
         resonator = [white for white in resonator if white != 0. and white < 1e-8]
         ax.plot(plot_temps, resonator, 'bo-')
         fig.savefig(filename_template.format(i+1) + 'png', format='png')
