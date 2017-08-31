@@ -1,0 +1,7 @@
+setup.py
+kids.egg-info/PKG-INFO
+kids.egg-info/SOURCES.txt
+kids.egg-info/dependency_links.txt
+kids.egg-info/top_level.txt
+src/__init__.py
+src/kids.py
