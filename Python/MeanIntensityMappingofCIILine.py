@@ -34,8 +34,8 @@ Created on Fri Aug 18 10:07:23 2017
  KEYWORD PARAMETERS:
      B11Lum -- Luminosity Function as a function of L_IR and z [W]
      Lstar -- Luminosity as function of redshit [W]
-     Phistar -- Luminosity Function of any type of galaxy [gal/dex/Mpc^3] 
-         gal(galileo is a unit of acceleration)  = cm/s^2 and dex(an order of magnetude) --> 10e0.1 = 0.1 dex
+     Phistar -- Luminosity Function of any type of galaxy [1/dex/Mpc^3] 
+         dex(an order of magnetude) --> 10e0.1 = 0.1 dex
      L_0 -- Luminosity of Sun [W] {default/actual value is 3.846e26}
      rPhi -- redshift dependent
      rL -- redshift dependent
@@ -58,11 +58,13 @@ Created on Fri Aug 18 10:07:23 2017
 """
 #%%
 import numpy as np
+import matplotlib.pyplot as plt
 import scipy.special as sf
 from scipy.integrate import quad
 import astropy.units as u
 import astropy.constants as c
 from astropy.cosmology import Planck15
+import cosmolopy.perturbation as cp
 """
 Constants
 """
@@ -97,34 +99,34 @@ def lstar(z):
     return answer
 
 #%%    
-def b11_IRLum_Func(L_IR,z): #Bethermin 11 Function
-    Phistar = phistar(z).value
-    Lstar = lstar(z).value
+def b11_IRLum_Func(L_IR,z): #Bethermin 11 Function / Schechter Luminosity Function
+    Phistar = phistar(z).value #Normalization Point
+    Lstar = lstar(z)
     #ll = np.linspace(1e8,1e13, num=10000)
     #L_IR = ll
     B11Lum = Phistar*np.power(L_IR/Lstar,1-beta)*np.exp(-0.5/(np.power(xi,2))*np.log(1+(L_IR/Lstar)))
     
-    answer = {'Lstar':Lstar.value, 'Phistar':Phistar.value, 'B11Lum':B11Lum}
+    answer = {'Lstar':Lstar, 'Phistar':Phistar, 'B11Lum':B11Lum}
     
     return answer
 
 def Si_integrand(L_IR,z): #eq7 B.D. Uzgil
-    lamb_rest = 158 #[mincron]
+    lamb_rest = (158*u.micron.to(u.km))*u.km #[mincron]
     A,B,sigma_A,sigma_B = 0.89,2.44,0.03,0.07
-    #D_L = # Luminosity Distance
-    #D_Aco = #Angular Diameter Distance: Gives info on the physical and angular size of a distant object
+    D_Aco = Planck15.angular_diameter_distance(z).value #Angular Diameter Distance: Gives info on the physical and angular size of a distant object [Mpc]
+    D_L = np.power(1+z,2)*D_Aco # Luminosity Distance
 # The ratio of D_Aco and D_L is the square inverse (1+z)
     
     H = Planck15.H0.value*np.sqrt(Planck15.Om(z)*np.power(1+z,3) +Planck15.Ok(z)*np.power(1+z,2) +Planck15.Ode(z)) # Hubble Parameter as a function of redshift
-    y = lamb_rest*(np.power(1+z,2)/H)
-    x_plus = A+sigma_A*log10(L_IR)-(B+sigma_B)
-    x_minus = A-sigma_A*log10(L_IR)-(B-sigma_B)
-    f_iplus = (np.power(10,x_plus)/L_IR)
+    y = lamb_rest*(np.power(1+z,2)/H) #[Mpc * s]
+    x_plus = A+sigma_A*np.log10(L_IR)-(B+sigma_B) # Eq 5&6 B.D. Uzgil
+    x_minus = A-sigma_A*np.log10(L_IR)-(B-sigma_B) # Eq 5&6 B.D. Uzgil
+    f_iplus = (np.power(10,x_plus)/L_IR) 
     f_iminus = (np.power(10,x_minus)/L_IR)
 
     
-    func_plus = b11_IRLum_Func(L_IR,z)*((f_iplus*L_IR)/(4*np.pi*np.power(1+z,2)))*y*np.power(1+z,-2)
-    func_minus = b11_IRLum_Func(L_IR,z)*((f_iminus*L_IR)/(4*np.pi*np.power(D_L,2)))*y*np.power(D_Aco,2)
+    func_plus = b11_IRLum_Func(L_IR,z)['B11Lum']*((f_iplus*L_IR)/(4*np.pi*np.power(D_L,2)))*y*np.power(D_Aco,2)
+    func_minus = b11_IRLum_Func(L_IR,z)['B11Lum']*((f_iminus*L_IR)/(4*np.pi*np.power(D_L,2)))*y*np.power(D_Aco,2)
 
     answer = {'plus':func_plus, 'minus':func_minus}
 
@@ -133,20 +135,20 @@ def Si_integrand(L_IR,z): #eq7 B.D. Uzgil
 def P_shot_integrand(L_IR,z):
     lamb_rest = 158 #[mincron]
     A,B,sigma_A,sigma_B = 0.89,2.44,0.03,0.07
-    #D_L = # Luminosity Distance
-    #D_Aco = #Angular Diameter Distance: Gives info on the physical and angular size of a distant object
+    D_Aco = Planck15.angular_diameter_distance(z).value #Angular Diameter Distance: Gives info on the physical and angular size of a distant object [Mpc]
+    D_L = np.power(1+z,2)*D_Aco # Luminosity Distance
 # The ratio of D_Aco and D_L is the square inverse (1+z)
     
     H = Planck15.H0.value*np.sqrt(Planck15.Om(z)*np.power(1+z,3) +Planck15.Ok(z)*np.power(1+z,2) +Planck15.Ode(z)) # Hubble Parameter as a function of redshift
     y = lamb_rest*(np.power(1+z,2)/H)
-    x_plus = A+sigma_A*log10(L_IR)-(B+sigma_B)
-    x_minus = A-sigma_A*log10(L_IR)-(B-sigma_B)
+    x_plus = A+sigma_A*np.log10(L_IR)-(B+sigma_B) # Eq 5&6 B.D. Uzgil
+    x_minus = A-sigma_A*np.log10(L_IR)-(B-sigma_B) # Eq 5&6 B.D. Uzgil
     f_iplus = (np.power(10,x_plus)/L_IR)
     f_iminus = (np.power(10,x_minus)/L_IR)
 
     
-    func_plus = b11_IRLum_Func(L_IR,z)*np.power(((f_iplus*L_IR)/(4*np.pi*np.power(D_L,2)))*y*np.power(D_Aco,2),2)
-    func_minus = b11_IRLum_Func(L_IR,z)*np.power(((f_iminus*L_IR)/(4*np.pi*np.power(D_L,2)))*y*np.power(D_Aco,2),2)
+    func_plus = b11_IRLum_Func(L_IR,z)['B11Lum']*np.power(((f_iplus*L_IR)/(4*np.pi*np.power(D_L,2)))*y*np.power(D_Aco,2),2)
+    func_minus = b11_IRLum_Func(L_IR,z)['B11Lum']*np.power(((f_iminus*L_IR)/(4*np.pi*np.power(D_L,2)))*y*np.power(D_Aco,2),2)
 
     answer = {'plus':func_plus, 'minus':func_minus}
 
@@ -154,7 +156,10 @@ def P_shot_integrand(L_IR,z):
 
 def P_cluster(L_IR,k,z):
     b = [2,2.3,2.6,2.9]# The linear bias is normally a function of z but in the paper 4 values are given
-    P_deltadelta = # I don't know what this function is
+    cosmology = {'omega_M_0':Planck15.Om0, 'omega_lambda_0':Planck15.Ode0, 'omega_k_0':Planck15.Ok0, 
+                 'h':Planck15.H0.value/100, 'omega_b_0' : Planck15.Ob0,'omega_n_0' : 0.0,'n' : 1.0,
+                 'sigma_8' : 0.9,'N_nu' : 0,'baryonic_effects' : False}
+    P_deltadelta = cp.power_spectrum(k,0,**cosmology) # This is probably the linear 
     
     power_plus = np.power(Si_integrand(L_IR,z)['plus']*b,2)*P_deltadelta
     power_minus = np.power(Si_integrand(L_IR,z)['minus']*b,2)*P_deltadelta
@@ -166,19 +171,10 @@ def P_cluster(L_IR,k,z):
 #Planck15.H
 #%%
 #NOT GETTING GREAT STARTING POINTS BUT SHAPE LOOKS GOOD. Z=1 IS AN ISSUE
+#k = np.logspace(-3,0)
 #z=0
 #Phistar = phistar(z).value
 #Lstar = lstar(z)
-#ll = np.linspace(1e8,1e13, num=10000)
-#L_IR = ll
-#B11Lum = Phistar*np.power(L_IR/Lstar,1-beta)*np.exp(-0.5/(np.power(xi,2))*np.log(1+(L_IR/Lstar)))
-#plt.loglog(ll,B11Lum,'-k',label='z= '+str(z))
-#plt.legend()
-    
-#GETTING GREAT STARTING POINTS BUT SHAPE LOOKS BAD. Z=1 IS AN ISSUE
-#z=0;phistar=3.234e-3*(1/u.dex/(np.power(u.Mpc,3)))*np.power(1+z,-0.919);lstar=2.377e10*np.power(1+z,0.145)
-#Phistar = phistar
-#Lstar = lstar
 #ll = np.linspace(1e8,1e13, num=10000)
 #L_IR = ll
 #B11Lum = Phistar*np.power(L_IR/Lstar,1-beta)*np.exp(-0.5/(np.power(xi,2))*np.log(1+(L_IR/Lstar)))
@@ -189,9 +185,21 @@ def P_cluster(L_IR,k,z):
 #np.trapz(,x=)
 
 
-#cosmology = {'omega_M_0':Planck15.Om0, 'omega_lambda_0':Planck15.Ode0, 'omega_k_0':Planck15.Ok0, 'h':Planck15.H0.value, 'omega_b_0' : Planck15.Ob0,'omega_n_0' : 0.0,'n' : 1.0,'sigma_8' : 0.9,'N_nu' : 0,'baryonic_effects' : False}
+#cosmology = {'omega_M_0':Planck15.Om0, 'omega_lambda_0':Planck15.Ode0, 'omega_k_0':Planck15.Ok0, 'h':Planck15.H0.value/1e2, 'omega_b_0' : Planck15.Ob0,'omega_n_0' : 0.0,'n' : 1.0,'sigma_8' : 0.9,'N_nu' : 0,'baryonic_effects' : False}
 #cp.norm_power(**cosmology)
+l_ir = np.logspace(8,13,num=10000)
+plt.figure('Bethermin 11 Function')
+plt.clf()
+plt.loglog(l_ir,b11_IRLum_Func(l_ir,z=0)['B11Lum'],'k', label = 'z=0')
+plt.loglog(l_ir,b11_IRLum_Func(l_ir,z=1)['B11Lum'],'r', label = 'z=1')
+plt.loglog(l_ir,b11_IRLum_Func(l_ir,z=1.5)['B11Lum'],'b', label = 'z=1.5')
+plt.loglog(l_ir,b11_IRLum_Func(l_ir,z=2)['B11Lum'],'g', label = 'z=2')
+plt.loglog(l_ir,b11_IRLum_Func(l_ir,z=3)['B11Lum'],'m', label = 'z=3')
 
+plt.ylabel(r'$\Phi$')
+plt.xlabel('L_IR')
+plt.legend()#(handles,labels,bbox_to_anchor=(.95,.6),borderaxespad=0.)
+plt.show()
 
 
 
