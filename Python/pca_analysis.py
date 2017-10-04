@@ -61,7 +61,7 @@ Created on Tue Sep 12 14:29:49 2017
 # EXAMPLE:
 #
 # MODIFICATION HISTORY:  
-#       10/26/2015 SHD
+#
 #
 #-
 #***********************************************************************
@@ -98,8 +98,10 @@ def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12):
 
 # Compute the covariance matrix
 # This is an m x m array, with element (i,j) equal to the covariance of columns i and j in inputdata
-#**** QUESTION**** : http://northstar-www.dartmouth.edu/doc/idl/html_6.2/CORRELATE.html in idl if the dimensions of the vectors being correlated are not the same then IDL picks the one with the smallest. Python does not do that so will there be a situation where this could be an issue?
+# Default rowvar = True, if so initialdata.transpose() must be done if you set rowvar = False the column is the variable
+
     covmatrix = np.cov(initialdata, rowvar = False) #This produces an n x n matrix. Each column vector must be the same length.
+    corrmatrix = np.corrcoef(initialdata,rowvar = False)
 
 # Compute the eigenvalues and eigenvectors of the covariance matrix
 # The result is a m-element array of eigenvalues
@@ -139,12 +141,128 @@ def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12):
 
     filtereddata_restored = filtereddata_restored + np.resize(mean_vec,(n,m))
     
-    struct = {'initialdata':initialdata, 'covmatrix':covmatrix, 'evals':evals, 'evecs':evecs, 
+    struct = {'initialdata':initialdata, 'covmatrix':covmatrix, 'corrmatrix':corrmatrix, 'evals':evals, 'evecs':evecs,
               'rotateddata':rotateddata, 'filtereddata':filtereddata, 'filtereddata_restored':filtereddata_restored}
           
     return struct
 
+def isblind(filename):
+     savdata = readsav(filename,python_dict=True)
+     allbins = savdata['multitone_data_raw'][0]['bins']
+     blindbins = savdata['multitone_data_raw'][0]['blindbin']
+ 
+     isblind = np.zeros_like(allbins)
+ 
+     for m in allbins:
+         for n in blindbins:
+             if m == n:
+                 index = np.where(allbins==m)
+                 isblind[index] = 1
+     return isblind
+
+def findresonators(filename):
+
+    data = readsav(filename,python_dict=True)
+    freqs = data['multitone_data_raw'][0]['frlist']
+
+    blinds = isblind(data)
+
+    resonatorlist = np.zeros(len(blinds)-np.sum(blinds))
+
+    res = 0
+    for ind in np.arange(0,len(blinds)):
+        if blinds[ind] == 0:
+            resonatorlist[res] = freqs[ind]
+            res+=1
+
+    return {'reslist': resonatorlist, 'isblind': blinds}
+
 #%%
+rawdata = readsav('/Users/tashaleebillings/Desktop/morereadingmaterial/rawdata.sav') #/scr/starfire/testdata/CD006/InputPowerScan/0_multitone/20170719_183039/rawdata.sav')
+blind = isblind('/Users/tashaleebillings/Desktop/morereadingmaterial/rawdata.sav') #/scr/starfire/testdata/CD006/InputPowerScan/0_multitone/20170719_183039/rawdata.sav')
+I = (rawdata.multitone_data_raw.streamdata[0].stream_data_concat[0].s21i[0])
+Q = (rawdata.multitone_data_raw.streamdata[0].stream_data_concat[0].s21q[0])
+I[np.logical_not(np.isfinite(Q))] = 0.
+Q[np.logical_not(np.isfinite(Q))] = 0.
+
+Ires = np.zeros((len(np.isfinite(I)),len(blind)-np.sum(blind)))
+Qres = np.zeros((len(np.isfinite(Q)),len(blind)-np.sum(blind)))
+Iblind = np.zeros((len(np.isfinite(I)),np.sum(blind)))
+Qblind = np.zeros((len(np.isfinite(Q)),np.sum(blind)))
+I_newElem = np.zeros(len(blind)-np.sum(blind))
+row = 0
+w = np.where(blind==0)[0]
+wb = np.where(blind==1)[0]
+ 
+for row in np.arange(0,len(Ires)):
+    Ires[row] = I[row][w]
+    Qres[row] = Q[row][w]
+    Iblind[row] = I[row][wb]
+    Qblind[row] = Q[row][wb]
+    row += 1
+
+IQres = np.concatenate((Ires,Qres),axis=1)
+IQblind = np.concatenate((Iblind,Qblind),axis=1)
+
+pcaI = pca_analysis(data=Ires, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
+pcaQ = pca_analysis(data=Qres, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
+pcaIQ = pca_analysis(data=IQres, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
+
+pcaIblind = pca_analysis(data=Iblind, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
+pcaQblind = pca_analysis(data=Qblind, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
+pcaIQblind = pca_analysis(data=IQblind, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
+
+#Covariance is just an unstandardized version of correlation.  To compute any correlation, we divide the covariance by the standard deviation of both variables to remove units of measurement.
+#So a covariance is just a correlation measured in the units of the original variables.
+
+#print(pcaI['evecs'].shape)
+#print(pcaI['covmatrix'].shape)
+#print(pcaI['corrmatrix']) #constrained to being between -1 and 1 to assess the strength of a realtionship between two variables
+#print(pcaI['covmatrix']) 
+
+#%% MKE A TABLE FULL OF DATA
+
+
+#%%
+"""
+#pathtodir = '/Users/tashaleebillings/Desktop/'
+
+plt.figure('Covariance Plot')
+plt.clf()
+plt.subplot(311)
+plt.title('I')
+plt.imshow(pcaI['covmatrix'],aspect='auto',interpolation='None')
+plt.subplot(312)
+plt.title('Q')
+plt.imshow(pcaQ['covmatrix'],aspect='auto',interpolation='None')
+plt.subplot(313)
+plt.title('IQ')
+plt.imshow(pcaIQ['covmatrix'],aspect='auto',interpolation='None')
+plt.colorbar()
+
+plt.tight_layout()
+#plt.savfig(pathtodir+'CovPlot.png')
+#plt.show()
+
+plt.figure('Correlation Plot')
+plt.clf()
+plt.subplot(311)
+plt.title('I')
+plt.imshow(pcaI['corrmatrix'],aspect='auto',interpolation='None')
+plt.subplot(312)
+plt.title('Q')
+plt.imshow(pcaQ['corrmatrix'],aspect='auto',interpolation='None')
+plt.subplot(313)
+plt.title('IQ')
+plt.imshow(pcaIQ['corrmatrix'],aspect='auto',interpolation='None')
+plt.colorbar()
+
+plt.tight_layout()
+#plt.savfig(pathtodir+'CorPlot.png')
+plt.show()
+"""
+
+
 
 
 
@@ -188,8 +306,12 @@ dataAdjust = (np.vstack((x,y))).transpose()
 pca = pca_analysis(data=dataAdjust, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
 print('evals =', pca['evals'])
 print('evecs =', pca['evecs'])
+print('PCA Filter = ', pca['filtereddata'])
+print('Initial Data = ', pca['initialdata'])
+print(pca['filtereddata'].shape)
+print(pca['initialdata'].shape)
+print(pca['covmatrix'].shape)
 """
-
 
 
 
