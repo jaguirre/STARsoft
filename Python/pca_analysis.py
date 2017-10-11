@@ -71,12 +71,14 @@ from scipy.io.idl import readsav
 from attrdict import AttrDict
 
 
-def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12):
+def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12):
 
 # Define the new variable initialdata, equal to the initial data
 # - we introduce a new variable so we can modify it in this function without changing the variable in the main program
 # Compute the size of initialdata, and explicitly define m and n 
-    initialdata = data
+#IMPORTANT: You need to look at your data to see how it is behaving because you might need cut off some of the bad data
+    #initialdata = data
+    initialdata = data[0:28640,:] #This line removes the junk we see at the end of the data
     sz = initialdata.shape
     m = sz[1] # Number of Columns
     n = sz[0] # Number of Rows
@@ -93,7 +95,7 @@ def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12):
     initialdata = initialdata - np.resize(mean_vec,(n,m)) # len(mean_vec) should be the number of columns, m.
 
     if normalize_stdev is True:
-        norm_vec = np.std(initialdata,axis=0) #Takes the std of all elements in the same column
+        norm_vec = np.std(initialdata,axis=0,ddof=1) #Takes the std of all elements in the same column
         initialdata = initialdata/np.resize(norm_vec,(n,m))
 
 # Compute the covariance matrix
@@ -123,16 +125,19 @@ def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12):
 #  - in other words, the covariance matrix of the rotated data is diagonal
 # Note that I have transposed the following two equations relative to the Coyote article, but it is consistent
     featurevector = evecs.transpose()
-    rotateddata = np.dot(initialdata,featurevector) # This is the matrix with the eigenvectors in the columns transposed so that the eigenvectors are now in the rows. #**** QUESTION**** : This is the final data
+    rotateddata = (np.inner(featurevector,initialdata)).transpose() # This is the matrix with the eigenvectors in the columns transposed so that the eigenvectors are now in the rows. #**** QUESTION**** : This is the final data
 
 # Define a filter that removes the principle components with the largest eigenvalues
-    filter = np.ones((n,m))
-    if nrem > 0:
-        filter[:,nrem-1] = 0
+    filtermatrix = np.ones((n,m))
+    #if nrem > 0:
+    #    filter[:,0:nrem] = 0
+
+    largest = np.where(evals == evals.max())[0]
+    filtermatrix[:,largest] = 0.
 
 # Multiple the rotated data by the filter, and derotate back into the original frame
     fv_inv = np.linalg.inv(featurevector)
-    filtereddata = np.dot(np.multiply(rotateddata,filter),fv_inv)
+    filtereddata = (np.inner(fv_inv,np.multiply(rotateddata,filtermatrix))).transpose()
 
 # Scale and shift the filtered data to restore the mean and variance of the initial dataset
     filtereddata_restored = filtereddata
@@ -142,7 +147,7 @@ def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12):
     filtereddata_restored = filtereddata_restored + np.resize(mean_vec,(n,m))
     
     struct = {'initialdata':initialdata, 'covmatrix':covmatrix, 'corrmatrix':corrmatrix, 'evals':evals, 'evecs':evecs,
-              'rotateddata':rotateddata, 'filtereddata':filtereddata, 'filtereddata_restored':filtereddata_restored}
+              'rotateddata':rotateddata, 'filtereddata':filtereddata, 'filtereddata_restored':filtereddata_restored, 'filter':filtermatrix}
           
     return struct
 
@@ -204,13 +209,13 @@ for row in np.arange(0,len(Ires)):
 IQres = np.concatenate((Ires,Qres),axis=1)
 IQblind = np.concatenate((Iblind,Qblind),axis=1)
 
-pcaI = pca_analysis(data=Ires, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
-pcaQ = pca_analysis(data=Qres, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
-pcaIQ = pca_analysis(data=IQres, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
+pcaI = pca_analysis(data=Ires, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12)
+pcaQ = pca_analysis(data=Qres, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12)
+pcaIQ = pca_analysis(data=IQres, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12)
 
-pcaIblind = pca_analysis(data=Iblind, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
-pcaQblind = pca_analysis(data=Qblind, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
-pcaIQblind = pca_analysis(data=IQblind, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
+pcaIblind = pca_analysis(data=Iblind, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12)
+pcaQblind = pca_analysis(data=Qblind, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12)
+pcaIQblind = pca_analysis(data=IQblind, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12)
 
 #Covariance is just an unstandardized version of correlation.  To compute any correlation, we divide the covariance by the standard deviation of both variables to remove units of measurement.
 #So a covariance is just a correlation measured in the units of the original variables.
