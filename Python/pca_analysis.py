@@ -69,6 +69,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.io.idl import readsav
 from attrdict import AttrDict
+from scipy import signal
 
 
 def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12):
@@ -78,7 +79,7 @@ def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12):
 # Compute the size of initialdata, and explicitly define m and n 
 #IMPORTANT: You need to look at your data to see how it is behaving because you might need cut off some of the bad data
     #initialdata = data
-    initialdata = data[0:28640,:] #This line removes the junk we see at the end of the data
+    initialdata = data[0:28600,:] #This line removes the junk we see at the end of the data
     sz = initialdata.shape
     m = sz[1] # Number of Columns
     n = sz[0] # Number of Rows
@@ -125,7 +126,7 @@ def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12):
 #  - in other words, the covariance matrix of the rotated data is diagonal
 # Note that I have transposed the following two equations relative to the Coyote article, but it is consistent
     featurevector = evecs.transpose()
-    rotateddata = (np.inner(featurevector,initialdata)).transpose() # This is the matrix with the eigenvectors in the columns transposed so that the eigenvectors are now in the rows. #**** QUESTION**** : This is the final data
+    rotateddata = (np.inner(featurevector,initialdata)).transpose() # This is the matrix with the eigenvectors in the columns transposed so that the eigenvectors are now in the rows.
 
 # Define a filter that removes the principle components with the largest eigenvalues
     filtermatrix = np.ones((n,m))
@@ -144,7 +145,7 @@ def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12):
     if normalize_stdev is True:
         filtereddata_restored = filtereddata_restored*np.resize(norm_vec,(n,m))
 
-    filtereddata_restored = filtereddata_restored + np.resize(mean_vec,(n,m))
+    filtereddata_restored = filtereddata_restored# + np.resize(mean_vec,(n,m))
     
     struct = {'initialdata':initialdata, 'covmatrix':covmatrix, 'corrmatrix':corrmatrix, 'evals':evals, 'evecs':evecs,
               'rotateddata':rotateddata, 'filtereddata':filtereddata, 'filtereddata_restored':filtereddata_restored, 'filter':filtermatrix}
@@ -170,7 +171,7 @@ def findresonators(filename):
     data = readsav(filename,python_dict=True)
     freqs = data['multitone_data_raw'][0]['frlist']
 
-    blinds = isblind(data)
+    blinds = isblind(filename)
 
     resonatorlist = np.zeros(len(blinds)-np.sum(blinds))
 
@@ -182,9 +183,21 @@ def findresonators(filename):
 
     return {'reslist': resonatorlist, 'isblind': blinds}
 
+def reverse_numeric(x,y):
+    return y-x
+
 #%%
-rawdata = readsav('/Users/tashaleebillings/Desktop/morereadingmaterial/rawdata.sav') #/scr/starfire/testdata/CD006/InputPowerScan/0_multitone/20170719_183039/rawdata.sav')
-blind = isblind('/Users/tashaleebillings/Desktop/morereadingmaterial/rawdata.sav') #/scr/starfire/testdata/CD006/InputPowerScan/0_multitone/20170719_183039/rawdata.sav')
+rawsav = ['/Users/tashaleebillings/Desktop/morereadingmaterial/InputPowerScanRawData.sav','/Users/tashaleebillings/Desktop/morereadingmaterial/HighPower1HighPassRawData.sav','/Users/tashaleebillings/Desktop/morereadingmaterial/HighPower2RawData.sav','/Users/tashaleebillings/Desktop/morereadingmaterial/LowPowerRawData.sav']
+rawsavdir = {'InputPowerScanRawData':'/Users/tashaleebillings/Desktop/morereadingmaterial/InputPowerScanRawData.sav','HighPower1HighPassRawData' :'/Users/tashaleebillings/Desktop/morereadingmaterial/HighPower1HighPassRawData.sav','HighPower2RawData':'/Users/tashaleebillings/Desktop/morereadingmaterial/HighPower2RawData.sav','LowPowerRawData':'/Users/tashaleebillings/Desktop/morereadingmaterial/LowPowerRawData.sav'}
+dataname = ['InputPowerScanRawData','HighPower1HighPassRawData','HighPower2RawData','LowPowerRawData']
+
+i=2
+rawdata = readsav(rawsav[i])
+blind = isblind(rawsav[i])
+resFreq = findresonators(rawsav[i])
+    
+#rawdata = readsav(rawsav[i]) #/scr/starfire/testdata/CD006/InputPowerScan/0_multitone/20170719_183039/rawdata.sav')
+#blind = isblind('/Users/tashaleebillings/Desktop/morereadingmaterial/InputPowerScanRawData.sav') #/scr/starfire/testdata/CD006/InputPowerScan/0_multitone/20170719_183039/rawdata.sav')
 I = (rawdata.multitone_data_raw.streamdata[0].stream_data_concat[0].s21i[0])
 Q = (rawdata.multitone_data_raw.streamdata[0].stream_data_concat[0].s21q[0])
 I[np.logical_not(np.isfinite(Q))] = 0.
@@ -225,11 +238,117 @@ pcaIQblind = pca_analysis(data=IQblind, normalize_stdev=1,absolute=0,nrem=1,tol=
 #print(pcaI['corrmatrix']) #constrained to being between -1 and 1 to assess the strength of a realtionship between two variables
 #print(pcaI['covmatrix']) 
 
-#%% MKE A TABLE FULL OF DATA
+#%%
+# MAKE PLOTS
 
+plt.figure(i)
+plt.clf()
+plt.title('Res Evals:'+dataname[i])
+plt.plot(sorted(pcaIQ['evals'],reverse=True), '.-')#,cmp=reverse_numeric))
+plt.tight_layout()
+
+fig, axes = plt.subplots(nrows=2 , ncols=2, figsize=(14,14))
+
+c1 = axes[0,0].imshow(pcaIQblind['corrmatrix'])
+fig.colorbar(c1,ax=axes[0][0])
+axes[0,0].set_title('IQ Blind Tones Correlation')
+
+c2 = axes[1,0].imshow(pcaIQblind['covmatrix'])
+fig.colorbar(c2,ax=axes[1][0])
+axes[1,0].set_title('IQ Blind Tones Covariance')
+
+c3 = axes[0,1].imshow(pcaIQ['corrmatrix'])
+fig.colorbar(c3,ax=axes[0][1])
+axes[0,1].set_title('IQ Tones Correlation')
+
+c4 = axes[1,1].imshow(pcaIQ['covmatrix'])
+fig.colorbar(c4,ax=axes[1][1])
+axes[1,1].set_title('IQ Tones Covariance')
+
+fig.suptitle(dataname[i])
+#handles, labels = axes.get_legend_handles_labels()
+#fig.legend(handles,labels,bbox_to_anchor=(.95,.6),borderaxespad=0.)
+#fig.tight_layout()
+
+fig,axes = plt.subplots(nrows=3, ncols=2, figsize=(14,14))
+
+p1 = axes[0,0].plot(pcaIQ['initialdata'][:,0],pcaIQ['initialdata'][:,11],'.')
+axes[0,0].set_title('Initial Data')
+axes[0,0].axis('equal')
+#axes[0,0].set_xlabel('I')
+#axes[0,0].set_ylabel('Q')
+
+p2 = axes[1,0].plot(pcaIQ['initialdata'][:,1],pcaIQ['initialdata'][:,12],'.')
+axes[1,0].axis('equal')
+#axes[1,0].set_title('Res 2 Initial Data')
+#axes[1,0].set_xlabel('I')
+#axes[1,0].set_ylabel('Q')
+
+p3 = axes[2,0].plot(pcaIQ['initialdata'][:,2],pcaIQ['initialdata'][:,13],'.')
+axes[2,0].axis('equal')
+#axes[2,0].set_title('Res 3 Initial Data')
+#axes[2,0].set_xlabel('I')
+#axes[2,0].set_ylabel('Q')
+
+p4 = axes[0,1].plot(pcaIQ['filtereddata_restored'][:,0],pcaIQ['filtereddata_restored'][:,11],'.')
+axes[0,1].set_title('Filtered Data Restored')
+axes[0,1].axis('equal')
+#axes[0,1].set_xlabel('I')
+#axes[0,1].set_ylabel('Q')
+
+p5 = axes[1,1].plot(pcaIQ['filtereddata_restored'][:,1],pcaIQ['filtereddata_restored'][:,12],'.')
+axes[1,1].axis('equal')
+#axes[1,1].set_xlabel('I')
+#axes[1,1].set_ylabel('Q')
+
+p6 = axes[2,1].plot(pcaIQ['filtereddata_restored'][:,2],pcaIQ['filtereddata_restored'][:,13],'.')
+axes[2,1].axis('equal')
+#axes[2,1].set_xlabel('I')
+#axes[2,1].set_ylabel('Q')
+
+fig.subtitle('PCA: IQ Res')
+
+#handles, labels = axes.get_legend_handles_labels()
+#fig.legend(handles,labels,bbox_to_anchor=(.95,.6),borderaxespad=0.)
+fig.tight_layout()
 
 #%%
 """
+np.random.seed(1)
+x = np.linspace(0, 1, 500)
+h = 0.01
+C = np.exp(-0.5 * (x - x[:, None]) ** 2 / h ** 2)
+y = 0.8 + 0.3 * np.random.multivariate_normal(np.zeros(len(x)), C)
+w = np.zeros_like(x)
+w[(x > 0.12) & (x < 0.28)] = 1
+y_norm = np.convolve(np.ones_like(y), w, mode='full')
+valid_indices = (y_norm != 0)
+y_norm = y_norm[valid_indices]
+y_w = np.convolve(y, w, mode='full')[valid_indices] / y_norm
+x_w = np.convolve(x, w, mode='full')[valid_indices] / y_norm
+y_fft = np.fft.fft(y)
+w_fft = np.fft.fft(w)
+yw_fft = y_fft * w_fft
+yw_final = np.fft.ifft(yw_fft)
+
+
+
+
+plt.figure('FULL');plt.plot(signal.fftconvolve(pcaIQ['initialdata'][:,2],pcaIQ['initialdata'][:,13], 'full'),'.',label='Res 3');plt.plot(signal.fftconvolve(pcaIQ['initialdata'][:,1],pcaIQ['initialdata'][:,12], 'full'),'.',label='Res 2');plt.plot(signal.fftconvolve(pcaIQ['initialdata'][:,0],pcaIQ['initialdata'][:,11], 'full'),'.',label='Res 1');plt.plot(np.max(signal.fftconvolve(pcaIQ['initialdata'][:,2],pcaIQ['initialdata'][:,13],'full')),np.where(np.max(signal.fftconvolve(pcaIQ['initialdata'][:,2],pcaIQ['initialdata'][:,13],'full')))[0],'*');plt.legend()
+plt.figure('FULL Blind');plt.plot(signal.fftconvolve(pcaIQblind['initialdata'][:,2],pcaIQblind['initialdata'][:,18], 'full'),'.',label='Bin 3');plt.plot(signal.fftconvolve(pcaIQblind['initialdata'][:,1],pcaIQblind['initialdata'][:,17], 'full'),'.',label='Bin 2');plt.plot(signal.fftconvolve(pcaIQblind['initialdata'][:,0],pcaIQblind['initialdata'][:,16], 'full'),'.',label='Bin 1');plt.plot(np.max(signal.fftconvolve(pcaIQblind['initialdata'][:,2],pcaIQblind['initialdata'][:,13],'full')),np.where(np.max(signal.fftconvolve(pcaIQblind['initialdata'][:,2],pcaIQblind['initialdata'][:,13],'full')))[0],'*');plt.legend()
+
+
+
+
+
+
+
+
+
+
+
+
+
 #pathtodir = '/Users/tashaleebillings/Desktop/'
 
 plt.figure('Covariance Plot')
@@ -265,17 +384,8 @@ plt.colorbar()
 plt.tight_layout()
 #plt.savfig(pathtodir+'CorPlot.png')
 plt.show()
-"""
 
 
-
-
-
-
-
-
-#%%
-"""
 #Made up Data Section
 
 
@@ -295,9 +405,9 @@ x2 += com
 # Initial Data
 #A = np.array([[x1],[x2]]).squeeze()
 A = np.vstack((x1,x2))
-"""
 
-"""
+
+
 nvec = 1000
 gx = 10.    
 gy = 10.   
@@ -316,6 +426,7 @@ print('Initial Data = ', pca['initialdata'])
 print(pca['filtereddata'].shape)
 print(pca['initialdata'].shape)
 print(pca['covmatrix'].shape)
+
 """
 
 
