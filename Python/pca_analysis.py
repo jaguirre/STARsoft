@@ -77,7 +77,7 @@ def pca_analysis(data, normalize_stdev=1,absolute=0,nrem=1,tol=1.e-12):
 # Define the new variable initialdata, equal to the initial data
 # - we introduce a new variable so we can modify it in this function without changing the variable in the main program
 # Compute the size of initialdata, and explicitly define m and n 
-#IMPORTANT: You need to look at your data to see how it is behaving because you might need cut off some of the bad data
+#IMPORTANT: You need to look at your data to see how it is behaving because you might need cut off some of the bad data at the end.
     #initialdata = data
     initialdata = data[0:28600,:] #This line removes the junk we see at the end of the data
     sz = initialdata.shape
@@ -191,17 +191,22 @@ rawsav = ['/Users/tashaleebillings/Desktop/morereadingmaterial/InputPowerScanRaw
 rawsavdir = {'InputPowerScanRawData':'/Users/tashaleebillings/Desktop/morereadingmaterial/InputPowerScanRawData.sav','HighPower1HighPassRawData' :'/Users/tashaleebillings/Desktop/morereadingmaterial/HighPower1HighPassRawData.sav','HighPower2RawData':'/Users/tashaleebillings/Desktop/morereadingmaterial/HighPower2RawData.sav','LowPowerRawData':'/Users/tashaleebillings/Desktop/morereadingmaterial/LowPowerRawData.sav'}
 dataname = ['InputPowerScanRawData','HighPower1HighPassRawData','HighPower2RawData','LowPowerRawData']
 
-i=2
+i=2 # i goes from 0 to len(rawsav). I'm sure you can use a for loop to iterate through the .sav files but I did it one by one.
 rawdata = readsav(rawsav[i])
 blind = isblind(rawsav[i])
 resFreq = findresonators(rawsav[i])
     
 #rawdata = readsav(rawsav[i]) #/scr/starfire/testdata/CD006/InputPowerScan/0_multitone/20170719_183039/rawdata.sav')
 #blind = isblind('/Users/tashaleebillings/Desktop/morereadingmaterial/InputPowerScanRawData.sav') #/scr/starfire/testdata/CD006/InputPowerScan/0_multitone/20170719_183039/rawdata.sav')
+
+#If you look at the data you will see that there are 'nan' at the end so I set them equal to zero but if you look at line 82 for the variable 'initialdata' I cut those off because they give a large spike. I guess you can write code that goes in and identifies and removes the 'nan'.
 I = (rawdata.multitone_data_raw.streamdata[0].stream_data_concat[0].s21i[0])
 Q = (rawdata.multitone_data_raw.streamdata[0].stream_data_concat[0].s21q[0])
-I[np.logical_not(np.isfinite(Q))] = 0.
-Q[np.logical_not(np.isfinite(Q))] = 0.
+hm = np.min(np.where(np.logical_not(np.isfinite(Q))))
+#I = I[:hm,:].copy()
+#Q = Q[:hm,:].copy()
+I[np.logical_not(np.isfinite(Q))] = 0. #Beacause I already cute the data off in line 82 technically I don't need this?
+Q[np.logical_not(np.isfinite(Q))] = 0. #Beacause I already cute the data off in line 82 technically I don't need this?
 
 Ires = np.zeros((len(np.isfinite(I)),len(blind)-np.sum(blind)))
 Qres = np.zeros((len(np.isfinite(Q)),len(blind)-np.sum(blind)))
@@ -218,6 +223,11 @@ for row in np.arange(0,len(Ires)):
     Iblind[row] = I[row][wb]
     Qblind[row] = Q[row][wb]
     row += 1
+
+#Ires = I[:,w].copy()
+#Iblind = I[:,wb].copy()
+#Qres = I[:,w].copy()
+#Qblind = I[:,wb].copy()
 
 IQres = np.concatenate((Ires,Qres),axis=1)
 IQblind = np.concatenate((Iblind,Qblind),axis=1)
@@ -306,7 +316,7 @@ axes[2,1].axis('equal')
 #axes[2,1].set_xlabel('I')
 #axes[2,1].set_ylabel('Q')
 
-fig.subtitle('PCA: IQ Res')
+#fig.subtitle('PCA: IQ Res')
 
 #handles, labels = axes.get_legend_handles_labels()
 #fig.legend(handles,labels,bbox_to_anchor=(.95,.6),borderaxespad=0.)
@@ -314,39 +324,23 @@ fig.tight_layout()
 
 #%%
 """
-np.random.seed(1)
-x = np.linspace(0, 1, 500)
-h = 0.01
-C = np.exp(-0.5 * (x - x[:, None]) ** 2 / h ** 2)
-y = 0.8 + 0.3 * np.random.multivariate_normal(np.zeros(len(x)), C)
-w = np.zeros_like(x)
-w[(x > 0.12) & (x < 0.28)] = 1
-y_norm = np.convolve(np.ones_like(y), w, mode='full')
-valid_indices = (y_norm != 0)
-y_norm = y_norm[valid_indices]
-y_w = np.convolve(y, w, mode='full')[valid_indices] / y_norm
-x_w = np.convolve(x, w, mode='full')[valid_indices] / y_norm
-y_fft = np.fft.fft(y)
-w_fft = np.fft.fft(w)
-yw_fft = y_fft * w_fft
-yw_final = np.fft.ifft(yw_fft)
-
-
-
+#----------------------------------------------------------------------------------------------
+# This section just makes test plots.
+#----------------------------------------------------------------------------------------------
 
 plt.figure('FULL');plt.plot(signal.fftconvolve(pcaIQ['initialdata'][:,2],pcaIQ['initialdata'][:,13], 'full'),'.',label='Res 3');plt.plot(signal.fftconvolve(pcaIQ['initialdata'][:,1],pcaIQ['initialdata'][:,12], 'full'),'.',label='Res 2');plt.plot(signal.fftconvolve(pcaIQ['initialdata'][:,0],pcaIQ['initialdata'][:,11], 'full'),'.',label='Res 1');plt.plot(np.max(signal.fftconvolve(pcaIQ['initialdata'][:,2],pcaIQ['initialdata'][:,13],'full')),np.where(np.max(signal.fftconvolve(pcaIQ['initialdata'][:,2],pcaIQ['initialdata'][:,13],'full')))[0],'*');plt.legend()
 plt.figure('FULL Blind');plt.plot(signal.fftconvolve(pcaIQblind['initialdata'][:,2],pcaIQblind['initialdata'][:,18], 'full'),'.',label='Bin 3');plt.plot(signal.fftconvolve(pcaIQblind['initialdata'][:,1],pcaIQblind['initialdata'][:,17], 'full'),'.',label='Bin 2');plt.plot(signal.fftconvolve(pcaIQblind['initialdata'][:,0],pcaIQblind['initialdata'][:,16], 'full'),'.',label='Bin 1');plt.plot(np.max(signal.fftconvolve(pcaIQblind['initialdata'][:,2],pcaIQblind['initialdata'][:,13],'full')),np.where(np.max(signal.fftconvolve(pcaIQblind['initialdata'][:,2],pcaIQblind['initialdata'][:,13],'full')))[0],'*');plt.legend()
 
+plt.figure('Eigenvector of PCA Component')
+plt.plot(pcaIQblind['evecs'][:,0],'.-',label='Bin 1')
+plt.plot(pcaIQblind['evecs'][:,1],'.-',label='Bin 2')
+plt.plot(pcaIQblind['evecs'][:,2],'.-',label='Bin 3')
+plt.legend()
 
 
-
-
-
-
-
-
-
-
+test= np.ones((100,))/100
+plt.figure(3);plt.plot(pcaIQblind['rotateddata'][:,0])
+plt.figure(3);plt.plot(np.convolve(pcaIQblind['rotateddata'][:,0],test,'same'))
 
 
 #pathtodir = '/Users/tashaleebillings/Desktop/'
@@ -385,11 +379,11 @@ plt.tight_layout()
 #plt.savfig(pathtodir+'CorPlot.png')
 plt.show()
 
+#----------------------------------------------------------------------------------------------
+# Made up Data Section. I used this section to test my code against Steve's IDL
+#----------------------------------------------------------------------------------------------
 
-#Made up Data Section
-
-
-# Generated Data
+# Generated Dataset 1
 N = 10000
 t = np.linspace(0,1,num=N)
 x1 = np.sin(2.*np.pi*t) #np.random.randn(N)
@@ -407,7 +401,7 @@ x2 += com
 A = np.vstack((x1,x2))
 
 
-
+# Generated Dataset 2
 nvec = 1000
 gx = 10.    
 gy = 10.   
@@ -417,6 +411,24 @@ c = np.random.randn(nvec)
 x = gx*c + np.sqrt(var_x)*np.random.randn(nvec)
 y = gy*c + np.sqrt(var_y)*np.random.randn(nvec)
 dataAdjust = (np.vstack((x,y))).transpose()
+
+# Generated Dataset 3
+np.random.seed(1)
+x = np.linspace(0, 1, 500)
+h = 0.01
+C = np.exp(-0.5 * (x - x[:, None]) ** 2 / h ** 2)
+y = 0.8 + 0.3 * np.random.multivariate_normal(np.zeros(len(x)), C)
+w = np.zeros_like(x)
+w[(x > 0.12) & (x < 0.28)] = 1
+y_norm = np.convolve(np.ones_like(y), w, mode='full')
+valid_indices = (y_norm != 0)
+y_norm = y_norm[valid_indices]
+y_w = np.convolve(y, w, mode='full')[valid_indices] / y_norm
+x_w = np.convolve(x, w, mode='full')[valid_indices] / y_norm
+y_fft = np.fft.fft(y)
+w_fft = np.fft.fft(w)
+yw_fft = y_fft * w_fft
+yw_final = np.fft.ifft(yw_fft)
 
 pca = pca_analysis(data=dataAdjust, normalize_stdev=1,absolute=0,nrem=0,tol=1.e-12)
 print('evals =', pca['evals'])
