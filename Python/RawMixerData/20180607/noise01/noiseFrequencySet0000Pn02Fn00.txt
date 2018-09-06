@@ -1,0 +1,4 @@
+DATE: 2018/06/07
+TIME: 06:41:45
+Noise Frequency (Hz): 331641896.00
+Noise Index: 139

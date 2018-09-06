@@ -1,0 +1,44 @@
+DATE: 2018/06/07
+TIME: 06:28:31
+DAQ MIN V: -5.000
+DAC MAX V: 5.000
+DAQ SAMPLE RATE: 20000
+MS TO WAIT BEFORE IQ POINT: 30
+MS TO WAIT BEFORE IQ POINT GAIN SWEEP: 80
+SOURCE POWER (dBm): 11.000
+MAX RF MIXER ATTEN: 17.000
+GAIN SPAN(Hz): 2000000.0
+ROUGH SPAN(Hz): 400000.0
+MEDIUM SPAN(Hz): 100000.0
+FINE SPAN(Hz): 20000.0
+GAIN POINTS: 40
+ROUGH POINTS: 50
+MEDIUM POINTS: 40
+FINE POINTS: 200
+
+NOTES:
+measureResonancesAndNoise02_HP8662A.vi
+
+SuperSpec devices in Cahill green dewar
+Cooldown21
+devA, (A1 --> A2) Gen2 lens-coupled device in lensbox, optical
+Cold amp channel #3 on amp breakout cable
+
+R&S SML03 --> splitter --> 1836 --> 1835 --> 1784 --> -20dB --> -20dB --> A1 --> A2 --> SLP-300 --> mitex 1291 --> mixer RF; splitterB --> mixer LO --> SR560 prepamps
+SR560 config in SHD labbook3, page 8
+  - LPF at 100kHz
+Cold Amp bias: V = 2.40V, I = 6.99 mA
+Warm Amp bias: V = 15.01V, I = 0.13A
+Fan blowing over window
+
+Some test scans to check SML03 as source
+
+
+0.33163,
+0.34220,
+0.35554,
+0.36179,
+0.32456,
+0.33688,
+0.35204,
+0.36363
