@@ -201,9 +201,12 @@ def Sxx_tot(alpha,Tstage,f,Tc,tau_max,n_star,Pinc,V,eta_pb,nu_opt,eta_opt,N0=N0_
     gamma_th = gammath(tau_max,n_star,V,Tstage,Tc)
     gamma_r = gammar(Tstage,Tc,P_abs,V,n_star,tau_max,eta_pb)
     delta = delta0(Tc)
+    N0 = N0.to(np.power(u.J,-1)*np.power(u.micron,-3))
+    #n_gamma = 1/e^(h*f/kT -1)
     
     Sxx_tot = ((2*c.h*nu_opt*P_abs*(1+n_gamma)+(4*tau_qp**2/V**2)*(gamma_th+gamma_r)).to(np.power(u.J,2)*u.Hz)*(eta_pb*tau_qp/(delta*V))**2*(alpha*S_2/(4*N0*delta))**2).to(np.power(u.Hz,-1))
     
+    Sxx_tot = (alpha*S_2/(4*N0*delta))**2 * ((((eta_pb*tau_qp/(delta*V))**2)*2*c.h*f*P_abs*(1+n_gamma))+(4*tau_qp/V**2*(gamma_th+gamma_r)))
     return Sxx_tot
 
 #%%
