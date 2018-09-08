@@ -172,6 +172,9 @@ def streamcal(resdict,phase_poly_order):
     stream_cor_calQ = stream_calQ - yc
     
     stream_rot_cor_calS21 = (stream_cor_calI+1j*stream_cor_calQ)*np.exp(-1j*th0)
+    
+    # find the phase range over which we have streaming data
+    stram_rot_cor_phase = np.angle(stream_rot_cor_calS21)
 
 #%%
     

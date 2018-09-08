@@ -9,6 +9,9 @@ import numpy as np
 from astropy import units as u
 from astropy import constants as c
 from scipy.special import kv,iv
+from astropy.modeling.blackbody import blackbody_lambda,blackbody_nu
+from scipy.integrate import trapz
+
 
 N0_Al = 1.72e10*np.power(u.micron,-3)*np.power(u.eV,-1)
 
@@ -17,8 +20,37 @@ N0_Al = 1.72e10*np.power(u.micron,-3)*np.power(u.eV,-1)
 MB_const = 1.76
 def delta0(Tc):
     if not hasattr(Tc,'unit'): Tc*=u.K
-    delta = MB_const*c.k_B*Tc
+
+    delta = (MB_const*c.k_B*Tc).to(u.J)
+
     return delta
+
+#%%
+def n_gamma(f,T_BB):
+    if not hasattr(T_BB,'unit'): T_BB*=u.K
+    T_BB = T_BB.to(u.K)
+    
+    ex = (c.h*f/(c.k_B*T_BB)).to(u.dimensionless_unscaled)
+    n_gamma = np.power(np.exp(ex)-1,-1)
+    return n_gamma
+
+#%%
+filt_k,filt_t = np.loadtxt('BandpassFilter.txt',skiprows=1,delimiter=',',unpack=True)
+indx = np.argsort(filt_k)
+freq_filt = (filt_k[indx]*u.k).to(u.THz,equivalencies=u.spectral())
+trans_filt = filt_t[indx]
+from scipy.interpolate import CubicSpline
+filt = CubicSpline(freq_filt.value,trans_filt) # function that takes in a freq in THz, returns a transmission value at that freq
+
+def TBB_to_Pinc(TBB,trans=1):
+    f = np.linspace(freq_filt.min(),freq_filt.max(),1000) # integrate over the range where we have filter transmission data
+    B_nu = blackbody_nu(f,TBB).to(u.W/u.m**2/u.steradian/u.Hz)
+    P_nu = B_nu*np.power(f.to(u.m,equivalencies=u.spectral()),2)*u.steradian
+    tr = trans*filt(f.to(u.THz))*u.dimensionless_unscaled
+    
+    P = trapz(P_nu*tr,x=f).to(u.pW)
+    
+    return P
 
 #%%
 def S1(Tstage,f,Tc):
@@ -40,10 +72,10 @@ def S1(Tstage,f,Tc):
     delta = delta0(Tc)
     
     arg = (0.5*beta*c.h*f).to(u.dimensionless_unscaled).value
-    S1 = (2/np.pi)*np.sqrt((2*delta*beta)/(np.pi))*np.sinh(arg)*kv(0,arg)
-    S1 = S1.to(u.dimensionless_unscaled)
+    S_1 = (2/np.pi)*np.sqrt((2*delta*beta)/(np.pi))*np.sinh(arg)*kv(0,arg)
+    S_1 = S_1.to(u.dimensionless_unscaled)
     
-    return S1
+    return S_1
 
 #%%
 def S2(Tstage,f,Tc):
@@ -66,10 +98,10 @@ def S2(Tstage,f,Tc):
     
     arg = (0.5*beta*c.h*f).to(u.dimensionless_unscaled).value
 
-    S2 = 1 + np.sqrt((2*delta*beta)/(np.pi))*np.exp(-arg)*iv(0,arg)
-    S2 = S2.to(u.dimensionless_unscaled)
+    S_2 = 1 + np.sqrt((2*delta*beta)/(np.pi))*np.exp(-arg)*iv(0,arg)
+    S_2 = S_2.to(u.dimensionless_unscaled)
     
-    return S2
+    return S_2
 
 #%%
 def nth(Tstage,Tc,N0=N0_Al):
@@ -82,54 +114,110 @@ def nth(Tstage,Tc,N0=N0_Al):
     Tc = Tc.to(u.K)
     
     delta = delta0(Tc)
-    nth = (2*N0*(np.sqrt(2*np.pi*c.k_B*Tstage*delta)).to(u.eV)*np.exp(-delta/(c.k_B*Tstage))).to(np.power(u.micron,-3))
+    n_th = (2*N0*(np.sqrt(2*np.pi*c.k_B*Tstage*delta)).to(u.eV)*np.exp(-delta/(c.k_B*Tstage))).to(np.power(u.micron,-3))
     
-    return nth
+    return n_th
 
 #%%
-def nqp(Tstage,Tc,Pabs,V,n_star,tau_max,eta_pb):
+def nqp(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans=1):
     if not hasattr(Tstage,'unit'):
         if Tstage.any() > 1.5: Tstage = Tstage*u.mK
         else: Tstage = Tstage*u.K
     Tstage = Tstage.to(u.K)
                        
-    if not hasattr(Tc,'unit'): Tc = Tc*u.K
+    if not hasattr(Tc,'unit'): Tc*=u.K
     Tc = Tc.to(u.K)
     
-    if not hasattr(Pabs,'unit'): Pabs = Pabs*u.pW
-    Pabs = Pabs.to(u.pW)
+    if not hasattr(TBB,'unit'): TBB*=u.K
+    TBB = TBB.to(u.K)
     
     if not hasattr(V,'unit'): V = V*np.power(u.micron,3)
     V = V.to(np.power(u.micron,3))
     
+    if not hasattr(tau_max,'unit'): tau_max*=u.microsecond
+    tau_max = tau_max.to(u.microsecond)
+    
+    if not hasattr(n_star,'unit'): n_star*=np.power(u.micron,-3)
+    n_star = n_star.to(np.power(u.micron,-3))
+    
+
+    eta_pb*=u.dimensionless_unscaled
+    
+    trans*=u.dimensionless_unscaled
+    
     delta = delta0(Tc)
+    
+    Pinc = TBB_to_Pinc(TBB,trans)
     
     n_th = nth(Tstage,Tc)
     
-    nqp = -n_star + ((n_star+n_th)**2 + (2*n_star*eta_pb*Pabs*tau_max)/(delta*V))**0.5
+    n_qp = (-n_star + ((n_star+n_th)**2 + (2*n_star*eta_pb*Pinc*tau_max)/(delta*V))**0.5).to(np.power(u.micron,-3))
     
-    return nqp
+    return n_qp
 
 #%%
 def tauqp(n_qp,tau_max,n_star):
+    if not hasattr(n_qp,'unit'): n_qp*=np.power(u.micron,-3)
+    n_qp = n_qp.to(np.power(u.micron,-3))
     
-    tau_qp = tau_max/(1+n_qp/n_star)
+    if not hasattr(tau_max,'unit'): tau_max*=u.microsecond
+    tau_max = tau_max.to(u.microsecond)
+    
+    if not hasattr(n_star,'unit'): n_star*=np.power(u.micron,-3)
+    n_star = n_star.to(np.power(u.micron,-3))
+    
+    tau_qp = (tau_max/(1+n_qp/n_star)).to(u.microsecond)
     
     return tau_qp
 
 #%%
 def gammath(tau_max,n_star,V,Tstage,Tc):
+    if not hasattr(Tstage,'unit'):
+        if Tstage.any() > 1.5: Tstage = Tstage*u.mK
+        else: Tstage = Tstage*u.K
+    Tstage = Tstage.to(u.K)
+                       
+    if not hasattr(Tc,'unit'): Tc*=u.K
+    Tc = Tc.to(u.K)
+    
+    if not hasattr(V,'unit'): V = V*np.power(u.micron,3)
+    V = V.to(np.power(u.micron,3))
+
+
     n_th = nth(Tstage,Tc)
     
-    gamma_th = ((n_th*V)/2)*(np.power(tau_max,-1)+np.power(tauqp(n_th,tau_max,n_star),-1))
+    gamma_th = (((n_th*V)/2)*(np.power(tau_max,-1)+np.power(tauqp(n_th,tau_max,n_star),-1))).to(np.power(u.microsecond,-1))
     
     return gamma_th
 
 #%%
-def gammar(Tstage,Tc,Pabs,V,n_star,tau_max,eta_pb):
-    n_qp = nqp(Tstage,Tc,Pabs,V,n_star,tau_max,eta_pb)
+def gammar(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans=1):
+    if not hasattr(Tstage,'unit'):
+        if Tstage.any() > 1.5: Tstage = Tstage*u.mK
+        else: Tstage = Tstage*u.K
+    Tstage = Tstage.to(u.K)
+                       
+    if not hasattr(Tc,'unit'): Tc*=u.K
+    Tc = Tc.to(u.K)
+    
+    if not hasattr(TBB,'unit'): TBB*=u.K
+    TBB = TBB.to(u.K)
+    
+    if not hasattr(V,'unit'): V = V*np.power(u.micron,3)
+    V = V.to(np.power(u.micron,3))
+
+    if not hasattr(tau_max,'unit'): tau_max*=np.power(u.micron,-3)
+    tau_max = tau_max.to(u.microsecond)
+    
+    if not hasattr(n_star,'unit'): n_star*=np.power(u.micron,-3)
+    n_star = n_star.to(np.power(u.micron,-3))
+
+    Pinc = TBB_to_Pinc(TBB,trans)
+    
+    n_qp = nqp(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans)
     tau_qp = tauqp(n_qp,tau_max,n_star)
-    gamma_r = ((n_qp*V)/2)*(np.power(tau_max,-1)+np.power(tau_qp,-1))
+    
+    gamma_r = (((n_qp*V)/2)*(np.power(tau_max,-1)+np.power(tau_qp,-1))).to(np.power(u.microsecond,-1))
     return gamma_r
 
 #%%

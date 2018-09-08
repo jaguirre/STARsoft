@@ -8,8 +8,9 @@ Created on Thu Jun  8 18:46:25 2017
 
 from astropy import units as u
 from astropy import constants as c
-from astropy.analytic_functions import blackbody_lambda
-from astropy.analytic_functions import blackbody_nu
+#from astropy.analytic_functions import blackbody_lambda
+#from astropy.analytic_functions import blackbody_nu
+from astropy.modeling.blackbody import blackbody_lambda,blackbody_nu
 from astropy.modeling import models
 from scipy.integrate import trapz
 
@@ -84,7 +85,7 @@ for i,T in enumerate(Ts):
     norm = (B_nu(nu,Ts.max())*np.power(lmbda,2)*u.steradian).max()
     plt.semilogy(nu,P_nu/norm,label='T = '+str(T))
     P[i] = trapz(P_nu*filt,x=nu)
-    print T,'  ',Qprint(P[i].to(u.pW))
+    print(T,'  ',Qprint(P[i].to(u.pW)))
 plt.plot(nu,filt,'k')
 plt.xlim([0,2])
 plt.xlabel('Frequency [THz]')
