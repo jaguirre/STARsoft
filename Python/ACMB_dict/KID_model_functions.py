@@ -11,6 +11,7 @@ from astropy import constants as c
 from scipy.special import kv,iv
 from astropy.modeling.blackbody import blackbody_lambda,blackbody_nu
 from scipy.integrate import trapz
+from scipy.special import lambertw
 
 
 N0_Al = 1.72e10*np.power(u.micron,-3)*np.power(u.eV,-1)
@@ -26,7 +27,7 @@ def delta0(Tc):
     return delta
 
 #%%
-def n_gamma(f,T_BB):
+def ngamma(f,T_BB):
     if not hasattr(T_BB,'unit'): T_BB*=u.K
     T_BB = T_BB.to(u.K)
     
@@ -43,14 +44,90 @@ from scipy.interpolate import CubicSpline
 filt = CubicSpline(freq_filt.value,trans_filt) # function that takes in a freq in THz, returns a transmission value at that freq
 
 def TBB_to_Pinc(TBB,trans=1):
-    f = np.linspace(freq_filt.min(),freq_filt.max(),1000) # integrate over the range where we have filter transmission data
-    B_nu = blackbody_nu(f,TBB).to(u.W/u.m**2/u.steradian/u.Hz)
-    P_nu = B_nu*np.power(f.to(u.m,equivalencies=u.spectral()),2)*u.steradian
-    tr = trans*filt(f.to(u.THz))*u.dimensionless_unscaled
-    
-    P = trapz(P_nu*tr,x=f).to(u.pW)
+    if np.size(TBB)==1:
+        if TBB==0: P=0*u.pW
+        else:
+            f = np.linspace(freq_filt.min(),freq_filt.max(),1000) # integrate over the range where we have filter transmission data
+            B_nu = blackbody_nu(f,TBB).to(u.W/u.m**2/u.steradian/u.Hz)
+            P_nu = B_nu*np.power(f.to(u.m,equivalencies=u.spectral()),2)*u.steradian
+            tr = trans*filt(f.to(u.THz))*u.dimensionless_unscaled
+            P = trapz(P_nu*tr,x=f).to(u.pW)
+
+    else:    
+        P = np.zeros(len(TBB))*u.pW
+        for ind,temp in enumerate(TBB):
+            if temp==0: P[ind] = 0*u.pW
+            else:
+                f = np.linspace(freq_filt.min(),freq_filt.max(),1000) # integrate over the range where we have filter transmission data
+                B_nu = blackbody_nu(f,temp).to(u.W/u.m**2/u.steradian/u.Hz)
+                P_nu = B_nu*np.power(f.to(u.m,equivalencies=u.spectral()),2)*u.steradian
+                tr = trans*filt(f.to(u.THz))*u.dimensionless_unscaled
+                P[ind] = trapz(P_nu*tr,x=f).to(u.pW)
     
     return P
+
+
+#%%
+def nth(Tstage,Tc,N0=N0_Al):
+    if not hasattr(Tstage,'unit'):
+        if Tstage.any() > 1.5: Tstage = Tstage*u.mK
+        else: Tstage = Tstage*u.K
+    Tstage = Tstage.to(u.K)
+                       
+    if not hasattr(Tc,'unit'): Tc = Tc*u.K
+    Tc = Tc.to(u.K)
+    
+    delta = delta0(Tc)
+    n_th = (2*N0*(np.sqrt(2*np.pi*c.k_B*Tstage*delta)).to(u.eV)*np.exp(-delta/(c.k_B*Tstage))).to(np.power(u.micron,-3))
+    
+    return n_th
+
+#%%
+def nqp(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans=1):
+    if not hasattr(Tstage,'unit'):
+        if Tstage.any() > 1.5: Tstage = Tstage*u.mK
+        else: Tstage = Tstage*u.K
+    Tstage = Tstage.to(u.K)
+                       
+    if not hasattr(Tc,'unit'): Tc*=u.K
+    Tc = Tc.to(u.K)
+    
+    if not hasattr(TBB,'unit'): TBB*=u.K
+    TBB = TBB.to(u.K)
+    
+    if not hasattr(V,'unit'): V = V*np.power(u.micron,3)
+    V = V.to(np.power(u.micron,3))
+    
+    if not hasattr(tau_max,'unit'): tau_max*=u.microsecond
+    tau_max = tau_max.to(u.microsecond)
+    
+    if not hasattr(n_star,'unit'): n_star*=np.power(u.micron,-3)
+    n_star = n_star.to(np.power(u.micron,-3))
+    
+
+    eta_pb*=u.dimensionless_unscaled
+
+    trans*=u.dimensionless_unscaled
+    
+    delta = delta0(Tc)
+        
+    n_th = nth(Tstage,Tc)
+    
+    Pinc = TBB_to_Pinc(TBB,trans)
+    n_qp = (-n_star + ((n_star+n_th)**2 + (2*n_star*eta_pb*Pinc*tau_max)/(delta*V))**0.5).to(np.power(u.micron,-3))
+    
+    return n_qp
+
+def Telec(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans=1,N0=N0_Al):
+    delta = delta0(Tc)
+    n_qp = nqp(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans)
+    M = np.power(2*N0*delta,-1) * np.power(2*np.pi,-0.5) * n_qp
+    M = M.to(u.dimensionless_unscaled)
+    arg = (2/np.power(M,2)).value
+    y = 0.5*lambertw(arg)
+    T_elec = delta/(c.k_B*y)
+    T_elec = np.abs(T_elec).to(u.K)
+    return T_elec
 
 #%%
 def S1(Tstage,f,Tc):
@@ -102,58 +179,6 @@ def S2(Tstage,f,Tc):
     S_2 = S_2.to(u.dimensionless_unscaled)
     
     return S_2
-
-#%%
-def nth(Tstage,Tc,N0=N0_Al):
-    if not hasattr(Tstage,'unit'):
-        if Tstage.any() > 1.5: Tstage = Tstage*u.mK
-        else: Tstage = Tstage*u.K
-    Tstage = Tstage.to(u.K)
-                       
-    if not hasattr(Tc,'unit'): Tc = Tc*u.K
-    Tc = Tc.to(u.K)
-    
-    delta = delta0(Tc)
-    n_th = (2*N0*(np.sqrt(2*np.pi*c.k_B*Tstage*delta)).to(u.eV)*np.exp(-delta/(c.k_B*Tstage))).to(np.power(u.micron,-3))
-    
-    return n_th
-
-#%%
-def nqp(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans=1):
-    if not hasattr(Tstage,'unit'):
-        if Tstage.any() > 1.5: Tstage = Tstage*u.mK
-        else: Tstage = Tstage*u.K
-    Tstage = Tstage.to(u.K)
-                       
-    if not hasattr(Tc,'unit'): Tc*=u.K
-    Tc = Tc.to(u.K)
-    
-    if not hasattr(TBB,'unit'): TBB*=u.K
-    TBB = TBB.to(u.K)
-    
-    if not hasattr(V,'unit'): V = V*np.power(u.micron,3)
-    V = V.to(np.power(u.micron,3))
-    
-    if not hasattr(tau_max,'unit'): tau_max*=u.microsecond
-    tau_max = tau_max.to(u.microsecond)
-    
-    if not hasattr(n_star,'unit'): n_star*=np.power(u.micron,-3)
-    n_star = n_star.to(np.power(u.micron,-3))
-    
-
-    eta_pb*=u.dimensionless_unscaled
-    
-    trans*=u.dimensionless_unscaled
-    
-    delta = delta0(Tc)
-    
-    Pinc = TBB_to_Pinc(TBB,trans)
-    
-    n_th = nth(Tstage,Tc)
-    
-    n_qp = (-n_star + ((n_star+n_th)**2 + (2*n_star*eta_pb*Pinc*tau_max)/(delta*V))**0.5).to(np.power(u.micron,-3))
-    
-    return n_qp
 
 #%%
 def tauqp(n_qp,tau_max,n_star):
@@ -212,7 +237,6 @@ def gammar(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans=1):
     if not hasattr(n_star,'unit'): n_star*=np.power(u.micron,-3)
     n_star = n_star.to(np.power(u.micron,-3))
 
-    Pinc = TBB_to_Pinc(TBB,trans)
     
     n_qp = nqp(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans)
     tau_qp = tauqp(n_qp,tau_max,n_star)
@@ -221,128 +245,133 @@ def gammar(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans=1):
     return gamma_r
 
 #%%
-def x_MB(alpha,Tc,Tstage,f,nqp,N0=N0_Al):
+def xMB(alpha,f,Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans=1,eta_opt=1,N0=N0_Al):
+    
     delta = delta0(Tc)
     
-    x_MB = -nqp*(alpha*S2(Tstage,f,Tc))/(4*N0*delta)
+    n_qp = nqp(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans)
+    T_elec = Telec(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans,N0)
+    
+    x_MB = -n_qp*eta_opt*(alpha*S2(T_elec,f,Tc))/(4*N0*delta)
     x_MB = x_MB.to(u.dimensionless_unscaled)
     
     return x_MB
 
 #%%
-def x_MB_fit(data,alpha,Tc,dx):
+def x_dark_fit(data,alpha,Tc,dx):
     Tstage = data[0]
     f = data[1]
+       
+    x_MB = xMB(alpha,f,Tstage,Tc,TBB=1,V=1,n_star=1,tau_max=1,eta_pb=1,trans=0,eta_opt=1,N0=N0_Al) 
+    x_tot = x_MB + dx
+    return x_tot
     
-    nqp = nth(Tstage,Tc)
-
-    x_MB_fit = x_MB(alpha,Tc,Tstage,f,nqp)+dx
-
-    return x_MB_fit
-
 #%%
-def x_MB_fit_2(data,alpha,Tc):
-    Tstage = data[0]
-    f = data[1]
-    
-    nqp = nth(Tstage,Tc)
-
-    x_MB_fit = x_MB(alpha,Tc,Tstage,f,nqp)
-
-    return x_MB_fit
-
-#%%
-def Q_inv_MB(alpha,Tc,Tstage,f,nqp,N0=N0_Al):
+def QinvMB(alpha,f,Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans=1,N0=N0_Al):
     delta = delta0(Tc)
     
-    Q_inv_MB = nqp*(alpha*S1(Tstage,f,Tc))/(2*N0*delta)
+    n_qp = nqp(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans)
+    T_elec = Telec(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans,N0)
+
+    S_1 = S1(T_elec,f,Tc)
+    
+    Q_inv_MB = n_qp*(alpha*S_1)/(2*N0*delta)
     Q_inv_MB = Q_inv_MB.to(u.dimensionless_unscaled)
     
     return Q_inv_MB
 
 #%%
-def Q_inv_MB_fit(data,alpha,Tc,Q_0):
+def Qinv_dark_fit(data,alpha,Tc,Q_inv0=0):
     Tstage = data[0]
     f = data[1]
+    Q_inv0*=u.dimensionless_unscaled
     
-    nqp = nth(Tstage,Tc)
-    Q_inv_MB_fit = Q_inv_MB(alpha,Tc,Tstage,f,nqp)
-    
-    return Q_inv_MB_fit
+    Q_inv_MB = QinvMB(alpha,f,Tstage,Tc,TBB=1,V=1,n_star=1,tau_max=1,eta_pb=1,trans=0,N0=N0_Al)
+    Q_inv = Q_inv_MB + Q_inv0
+    return Q_inv
 
 #%%
-def x_opt(alpha,Tstage,f,Tc,tau_max,n_star,Pinc,eta_pb,N0=N0_Al):
-    S_2 = S2(Tstage,f,Tc)
-    delta = delta0(Tc)
-    P_abs = eta_opt*Pinc
-    
-    x_opt = (-alpha*S_2/(4*N0*delta)*(n_star*(1.+(2*eta_pb*P_abs*tau_max)/(delta*V*n_star))**0.5 - n_star)).to(u.dimensionless_unscaled)
-    
-    return x_opt
+def x_Qinv_dark_simulfit(data,alpha,Tc,dx,Q_inv0):
+    x = x_dark_fit(data,alpha,Tc,dx)
+    Qinv = Qinv_dark_fit(data,alpha,Tc,Q_inv0)
+
+    glom = np.concatenate((x,Qinv))
+    return glom
 
 #%%
-def Sxx_tot(alpha,Tstage,f,Tc,tau_max,n_star,Pinc,V,eta_pb,nu_opt,eta_opt,N0=N0_Al,n_gamma=0):
+def Sxx(alpha,f,Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,nu_opt,trans=1,eta_opt=1,N0=N0_Al):
     S_2 = S2(Tstage,f,Tc)
-    P_abs = eta_opt*Pinc
-    n_qp = nqp(Tstage,Tc,P_abs,V,n_star,tau_max,eta_pb)
+    P_inc = TBB_to_Pinc(TBB,trans)
+    P_abs = eta_opt*P_inc
+    n_gamma = ngamma(nu_opt,TBB)
+    n_qp = nqp(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans)
     tau_qp = tauqp(n_qp,tau_max,n_star)
     gamma_th = gammath(tau_max,n_star,V,Tstage,Tc)
-    gamma_r = gammar(Tstage,Tc,P_abs,V,n_star,tau_max,eta_pb)
+    gamma_r = gammar(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans)
     delta = delta0(Tc)
-    N0 = N0.to(np.power(u.J,-1)*np.power(u.micron,-3))
-    #n_gamma = 1/e^(h*f/kT -1)
-       
-    Sxx_tot = ((alpha*S_2/(4*N0*delta))**2 * ((((eta_pb*tau_qp/(delta*V))**2)*2*c.h*f*P_abs*(1+n_gamma))+((4*tau_qp**2/V**2)*(gamma_th+gamma_r)))).to(np.power(u.Hz,-1))
-    return Sxx_tot
+    
+    S_xx = np.power(alpha*S_2/(4*N0*delta),2) * (np.power(eta_pb*tau_qp/(delta*V),2)*2*c.h*nu_opt*P_abs*(1+n_gamma) + 4*np.power(tau_qp,2)*(gamma_th+gamma_r)/np.power(V,2))
+    S_xx = S_xx.to(np.power(u.Hz,-1))
+    
+    return S_xx
+
+def Sxx_fit(data,n_star,tau_max,eta_opt,Sxx_0):
+    alpha,f,Tstage,TBB,V,eta_pb,nu_opt,trans,N0 = data
+    
+    S_xx = Sxx()
 
 #%%
 #%%
 
-#test case:
-alpha = 0.8*u.dimensionless_unscaled
-Tstage = 0.215*u.K
-f = 300*u.MHz
-Tc = 1.4*u.K
-tau_max = 35*u.microsecond
-n_star = 1318*(np.power(u.micron,-3))
-Pinc = 0.5*u.pW
-V = 76*np.power(u.micron,3)
-eta_pb = 0.57
-nu_opt = (350*u.micron).to(u.GHz,equivalencies=u.spectral())
-eta_opt = 0.17*u.dimensionless_unscaled
-N0=N0_Al
-n_gamma=0
-
-Pinc = np.linspace(0.01,2.5,20)*u.pW
-sxxtest = Sxx_tot(alpha,Tstage,f,Tc,tau_max,n_star,Pinc,V,eta_pb,nu_opt,eta_opt,N0,n_gamma)
-xtest = x_opt(alpha,Tstage,f,Tc,tau_max,n_star,Pinc,eta_pb)
-#%%
-# individual device fitting
-
-# import dark data for individual resonator
-cd011_res3 = np.transpose(np.loadtxt('cd011_res3.csv',delimiter=',',skiprows=1))
-T_stage,xavg,xerr,Qravg,Qrerr,Sxx_avg,Sxx_err = np.loadtxt('cd011_res3.csv',delimiter=',',skiprows=1,unpack=True)
-T_stage*=u.K
-xavg*=u.dimensionless_unscaled
-xerr*=u.dimensionless_unscaled
-Qravg*=u.dimensionless_unscaled
-Qrerr*=u.dimensionless_unscaled
-Sxx_avg*=np.power(u.Hz,-1)
-Sxx_err*=np.power(u.Hz,-1)
-#for el in [xavg,xerr,Qravg,Qrerr]: el[0]*=u.dimensionless_unscaled
+##test case:
+#alpha = 0.8*u.dimensionless_unscaled
+#f = 250*u.MHz
+#Tstage = 0.215*u.K
+#Tstage = np.linspace(0.2,0.4,15)*u.K
+#Tc = 1.4*u.K
+#TBB = 6.0*u.K
+#V = 76*np.power(u.micron,3)
+#n_star = 1318*(np.power(u.micron,-3))
+#tau_max = 35*u.microsecond
+#eta_pb = 0.57
+#nu_opt = (350*u.micron).to(u.GHz,equivalencies=u.spectral())
+#trans=1
+#eta_opt = 0.17*u.dimensionless_unscaled
+#N0=N0_Al
+#
+#TstageLTD,xLTD,QinvLTD = np.loadtxt('C:/Users/Alyssa/Penn Google Drive/Penn & NSTRF/Caltech Devices/STARsoft/LTD/LTDData_x_invQi_vs_Tstage.txt',unpack=True,comments=';')
+#TstageLTD*=u.K
+#
+#Pinc = np.linspace(0.01,2.5,20)*u.pW
+#sxxtest = Sxx_tot(alpha,Tstage,f,Tc,tau_max,n_star,Pinc,V,eta_pb,nu_opt,eta_opt,N0,n_gamma)
+#xtest = x_opt(alpha,Tstage,f,Tc,tau_max,n_star,Pinc,eta_pb)
+##%%
+## individual device fitting
+#
+## import dark data for individual resonator
+#cd011_res3 = np.transpose(np.loadtxt('cd011_res3.csv',delimiter=',',skiprows=1))
+#T_stage,xavg,xerr,Qravg,Qrerr,Sxx_avg,Sxx_err = np.loadtxt('cd011_res3.csv',delimiter=',',skiprows=1,unpack=True)
+#T_stage*=u.K
+#xavg*=u.dimensionless_unscaled
+#xerr*=u.dimensionless_unscaled
+#Qravg*=u.dimensionless_unscaled
+#Qrerr*=u.dimensionless_unscaled
+#Sxx_avg*=np.power(u.Hz,-1)
+#Sxx_err*=np.power(u.Hz,-1)
+##for el in [xavg,xerr,Qravg,Qrerr]: el[0]*=u.dimensionless_unscaled
+##for el in [Sxx_avg,Sxx_err]: el*=(np.power(u.Hz,-1))
+#
+#
+#
+## fit dark data: simultaneous fit of x and Qinv vs T_stage --> free parameters alpha, Tc, dx0, Qinv0
+#
+#
+## import optical data for individual resonator
+#T_BB,xavg,xerr,Qravg,Qrerr,Sxx_avg,Sxx_err = np.loadtxt('cd010_res1.csv',delimiter=',',skiprows=1,unpack=True)
+#for el in [xavg,xerr,Qravg,Qrerr]: el*=u.dimensionless_unscaled
 #for el in [Sxx_avg,Sxx_err]: el*=(np.power(u.Hz,-1))
-
-
-
-# fit dark data: simultaneous fit of x and Qinv vs T_stage --> free parameters alpha, Tc, dx0, Qinv0
-
-
-# import optical data for individual resonator
-T_BB,xavg,xerr,Qravg,Qrerr,Sxx_avg,Sxx_err = np.loadtxt('cd010_res1.csv',delimiter=',',skiprows=1,unpack=True)
-for el in [xavg,xerr,Qravg,Qrerr]: el*=u.dimensionless_unscaled
-for el in [Sxx_avg,Sxx_err]: el*=(np.power(u.Hz,-1))
-
-
+#
+#
 
 
 

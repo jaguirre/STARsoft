@@ -123,6 +123,7 @@ def f(c, x, y):
     Ri = calc_R(x, y, *c)
     return Ri - Ri.mean()
 
+from scipy import optimize
 def leastsq_circle(x,y):
     # coordinates of the barycenter
     x_m = np.mean(x)
@@ -166,7 +167,7 @@ def streamcal(resdict,phase_poly_order):
     
     # apply the shift and rotation to the noise stream
     stream_calI = np.real(resdict['stream']['cal S21']).value
-    stram_calQ = np.imag(resdict['stream']['cal S21']).value
+    stream_calQ = np.imag(resdict['stream']['cal S21']).value
     
     stream_cor_calI = stream_calI - xc
     stream_cor_calQ = stream_calQ - yc
@@ -174,7 +175,7 @@ def streamcal(resdict,phase_poly_order):
     stream_rot_cor_calS21 = (stream_cor_calI+1j*stream_cor_calQ)*np.exp(-1j*th0)
     
     # find the phase range over which we have streaming data
-    stram_rot_cor_phase = np.angle(stream_rot_cor_calS21)
+    stream_rot_cor_phase = np.angle(stream_rot_cor_calS21)
 
 #%%
     
