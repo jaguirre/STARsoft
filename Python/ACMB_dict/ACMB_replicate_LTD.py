@@ -72,11 +72,12 @@ PincLTD*=u.pW
 SxxLTD*=np.power(u.Hz,-1)
 
 Tstage0 = .215*u.K
+f = 250*u.MHz
 T_BB = np.linspace(6,12,15)*u.K
 x2test = kids.xMB(alpha,f,Tstage0,Tc,T_BB,V,n_star,tau_max,eta_pb,trans=1,eta_opt=.17,N0=N0)
 
-sxx2test = kids.Sxx(alpha,f,Tstage0,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,trans=1,eta_opt=1,N0=N0)
-data = [alpha,f,Tstage,TBB,V,eta_pb,nu_opt,trans,N0]
+sxx2test = kids.Sxx(alpha,f,Tstage0,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,trans=1,eta_opt=0.17,N0=N0)
+data = [alpha,f,Tstage,Tc,TBB,V,eta_pb,nu_opt,trans,N0]
 
 plt.close('all')
 f5 = plt.figure('Figure 5')
@@ -87,5 +88,9 @@ p3.plot(kids.TBB_to_Pinc(T_BB),x2test,'g.')
 p4 = f5.add_subplot(122)
 p4.plot(PincLTD,SxxLTD,'ks')
 p4.plot(kids.TBB_to_Pinc(T_BB),sxx2test,'g.')
+
+
+0.0000000,0.13447390,0.18111091,0.28131964,0.41245929,0.57701855,0.77665690,1.0122914,1.5921849,2.3135104
+1.9475430e-17,5.7032281e-17,7.4020492e-17,8.6542582e-17,1.0538483e-16,1.1351225e-16,1.2821137e-16,1.3910934e-16,1.4928895e-16,1.6568856e-16
 
 

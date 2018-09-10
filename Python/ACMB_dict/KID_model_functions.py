@@ -310,15 +310,19 @@ def Sxx(alpha,f,Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,nu_opt,trans=1,eta_opt=1,N
     gamma_r = gammar(Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,trans)
     delta = delta0(Tc)
     
-    S_xx = np.power(alpha*S_2/(4*N0*delta),2) * (np.power(eta_pb*tau_qp/(delta*V),2)*2*c.h*nu_opt*P_abs*(1+n_gamma) + 4*np.power(tau_qp,2)*(gamma_th+gamma_r)/np.power(V,2))
+    S_xx = np.power(alpha*S_2/(4*N0*delta),2) * (np.power(eta_pb*tau_qp/(delta*V),2)*(2*c.h*nu_opt*P_abs*eta_opt)*(1+n_gamma) + 4*np.power(tau_qp,2)*(gamma_th+gamma_r)/np.power(V,2))
     S_xx = S_xx.to(np.power(u.Hz,-1))
     
     return S_xx
 
 def Sxx_fit(data,n_star,tau_max,eta_opt,Sxx_0):
-    alpha,f,Tstage,TBB,V,eta_pb,nu_opt,trans,N0 = data
+    alpha,f,Tstage,Tc,TBB,V,eta_pb,nu_opt,trans,N0 = data
     
-    S_xx = Sxx()
+    S_xx = Sxx(alpha,f,Tstage,Tc,TBB,V,n_star,tau_max,eta_pb,nu_opt,trans,eta_opt,N0)
+    S_xx_tot = S_xx + Sxx_0
+    S_xx_tot = S_xx_tot.to(np.power(u.Hz,-1))
+    
+    return S_xx_tot
 
 #%%
 #%%
