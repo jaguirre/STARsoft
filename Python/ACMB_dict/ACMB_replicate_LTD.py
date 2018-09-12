@@ -78,31 +78,45 @@ f = 245*u.MHz
 T_BB = np.linspace(6,11,15)*u.K
 Pinc = kids.TBB_to_Pinc(T_BB)
 x2_interp = np.interp(Pinc,Pinc2LTD,x2LTD)
-Sxx_interp = np.interp(Pinc,PincLTD,SxxLTD)
+Sxx_interp = np.interp(Pinc,PincLTD,SxxLTD)*np.power(u.Hz,-1)
 
 x2test = kids.xMB(alpha,f,Tstage0,Tc,T_BB,V,n_star,tau_max,eta_pb,trans=1,eta_opt=.17,N0=N0)
 sxx2test = kids.Sxx(alpha,f,Tstage0,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,eta_opt=0.17,trans=1,N0=N0)
 
-data2 = [alpha,f,Tstage0,Tc,T_BB,V,eta_pb*u.dimensionless_unscaled,nu_opt,trans*u.dimensionless_unscaled,N0]
-data3 = [np.asarray_chkfinite(da) for da in data2]
-    
-data2 = [f,alpha]
-print(np.asarray_chkfinite(data2))
+data2 = [T_BB,alpha,f,Tstage0,Tc,V,eta_pb*u.dimensionless_unscaled,nu_opt,trans,N0]
+p0x = (n_star.value,tau_max.value,eta_opt,(x2test[1]/f).value)
+boundsx = ([0,0,0,(min(x2_interp)/f).value],[np.inf,1e5,1,-(min(x2_interp)/f).value])
 x2sig = 0.05*x2_interp[1]*np.ones_like(x2_interp)
+
+p0Sxx = (n_star.value,tau_max.value,eta_opt,(Sxx_interp[0]/2).value)
+boundsSxx = ([0,0,0,0],[np.inf,1e5,1,(Sxx_interp[0]).value])
 Sxxsig = 0.05*Sxx_interp
 
-#xfitopt,xfitcov = curve_fit(fitkids.x_dark_fit,data,xLTD,p0=(.73,1.39,(xtest[0]/f).value),sigma=xsig,bounds=([0,.5,(min(xLTD)/f).value],[1,2.5,0]))
-x2fitopt,x2fitcov = curve_fit(fitkids.x_opt_fit,data3,x2_interp)#,sigma=x2sig)
+x2fitopt,x2fitcov = curve_fit(fitkids.x_opt_fit,data2,x2_interp,sigma=x2sig,p0=p0x,bounds=boundsx)
+Sxxfitopt,Sxxfitcov = curve_fit(fitkids.Sxx_fit,data2,Sxx_interp,sigma=Sxxsig,p0=p0Sxx,bounds=boundsSxx)
+
+opt_data = np.concatenate((x2_interp,Sxx_interp))
+opt_sigma = np.concatenate((x2sig,Sxxsig))
+opt_p0 =(n_star.value,tau_max.value,eta_opt,(x2test[1]/f).value,(Sxx_interp[0]/2).value)
+opt_bounds = ([0,0,0,(min(x2_interp)/f).value,0],[np.inf,1e5,1,-(min(x2_interp)/f).value,(Sxx_interp[0]).value])
+opt_fitopt,opt_fitcov = curve_fit(fitkids.x_Sxx_opt_simulfit,data2,opt_data,sigma=opt_sigma,p0=opt_p0,bounds=opt_bounds)
+
 
 #plt.close('all')
 f5 = plt.figure('Figure 5')
 p3 = f5.add_subplot(121)
-p3.plot(Pinc2LTD,x2LTD,'ks')
-p3.plot(kids.TBB_to_Pinc(T_BB),x2test,'g.')
+p3.plot(Pinc2LTD,x2LTD,'ys')
+p3.plot(Pinc,x2_interp,'ks')
+p3.plot(Pinc,x2test,'g.')
+p3.plot(Pinc,fitkids.x_opt_fit(data2,*x2fitopt),'cx')
+p3.plot(Pinc,fitkids.x_Sxx_opt_simulfit(data2,*opt_fitopt)[0:len(Pinc)],'r-')
 
 p4 = f5.add_subplot(122)
-p4.plot(PincLTD,SxxLTD,'ks')
-p4.plot(kids.TBB_to_Pinc(T_BB),sxx2test,'g.')
+p4.plot(PincLTD,SxxLTD,'ys')
+p4.plot(Pinc,Sxx_interp,'ks')
+p4.plot(Pinc,sxx2test,'g.')
+p4.plot(Pinc,fitkids.Sxx_fit(data2,*Sxxfitopt),'cx')
+p4.plot(Pinc,fitkids.x_Sxx_opt_simulfit(data2,*opt_fitopt)[len(Pinc):],'r-')
 
 
 

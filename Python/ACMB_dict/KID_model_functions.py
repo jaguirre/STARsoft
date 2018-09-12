@@ -328,6 +328,12 @@ def gammath(Tstage,Tc,V,n_star,tau_max):
     if not hasattr(V,'unit'): V = V*np.power(u.micron,3)
     V = V.to(np.power(u.micron,3))
 
+    if not hasattr(n_star,'unit'): n_star*=np.power(u.micron,-3)
+    n_star = n_star.to(np.power(u.micron,-3))
+    
+    if not hasattr(tau_max,'unit'): tau_max*=u.microsecond
+    tau_max = tau_max.to(u.microsecond)
+    
     # Calculate the number density of thermal quasiparticles
     n_th = nth(Tstage,Tc)
     
@@ -365,7 +371,7 @@ def gammar(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans=1):
     if not hasattr(V,'unit'): V = V*np.power(u.micron,3)
     V = V.to(np.power(u.micron,3))
 
-    if not hasattr(tau_max,'unit'): tau_max*=np.power(u.micron,-3)
+    if not hasattr(tau_max,'unit'): tau_max*=u.microsecond
     tau_max = tau_max.to(u.microsecond)
     
     if not hasattr(n_star,'unit'): n_star*=np.power(u.micron,-3)
