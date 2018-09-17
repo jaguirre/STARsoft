@@ -14,18 +14,22 @@ from astropy import constants as c
 # It's set as default for all these functions so changing it here should change it everywhere.
 N0_Al = 1.72e10*np.power(u.micron,-3)*np.power(u.eV,-1) 
 
+
 #%%
 ''' Function to calculate the superconducting band gap delta0 as a function of critical temperature Tc 
     The parameter relating them, MB_const, could be adjusted from its typical Mattis-Bardeen value of 1.76 for non-Mattis-Bardeen superconductors
      Inputs -- Tc: Superconducting critical temperature in K
     Outputs -- delta: Superconducting bandgap energy delta in J '''
 MB_const = 1.76
-def delta0(Tc):
+def delta0(T_c):
     # Get our units in order 
-    if not hasattr(Tc,'unit'): Tc*=u.K
-
+    if not hasattr(T_c,'unit'): T_c*=u.K
+    T_c = T_c.to(u.K)
     # Calculate delta
-    delta = (MB_const*c.k_B*Tc).to(u.J)
+#    print(T_c)
+    delta = (MB_const*c.k_B*T_c).to(u.J)
+#    delta = (MB_const*c.k_B*T_c)
+
 
     return delta
 
