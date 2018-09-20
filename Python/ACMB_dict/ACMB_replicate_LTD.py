@@ -36,15 +36,15 @@ eta_opt = 0.17*u.dimensionless_unscaled
 N0=1.72e10*np.power(u.micron,-3)*np.power(u.eV,-1)
 
 #%%
-#TstageLTD,xLTD,QinvLTD = np.loadtxt('LTDData_x_invQi_vs_Tstage.txt',unpack=True,comments=';')
-#TstageLTD*=u.K
-
-dark2_Tstage,dark2_xavg,dark2_xerr,dark2_Qravg,dark2_Qrerr,dark2_Sxxavg,dark2_Sxxerr = np.loadtxt('cd011_res2_corr.txt',unpack=True,skiprows=1)
-TstageLTD = dark2_Tstage
+TstageLTD,xLTD,QinvLTD = np.loadtxt('LTDData_x_invQi_vs_Tstage.txt',unpack=True,comments=';')
 TstageLTD*=u.K
 
-xLTD = dark2_xavg
-QinvLTD = dark2_Qravg
+#dark2_Tstage,dark2_xavg,dark2_xerr,dark2_Qravg,dark2_Qrerr,dark2_Sxxavg,dark2_Sxxerr = np.loadtxt('cd011_res2_corr.txt',unpack=True,skiprows=1)
+#TstageLTD = dark2_Tstage
+#TstageLTD*=u.K
+
+#xLTD = dark2_xavg
+#QinvLTD = dark2_Qravg
 
 xtest = kids.xMB(alpha,f,TstageLTD,Tc,6*u.K,V,n_star,tau_max,eta_pb,eta_opt=1,trans=0,N0=N0)
 Qinvtest = kids.QinvMB(alpha,f,TstageLTD,Tc,6*u.K,V,n_star,tau_max,eta_pb,eta_opt=1,trans=0,N0=N0)
