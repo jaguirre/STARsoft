@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from astropy import units as u
 from astropy import constants as c
 from dictionary_functions import *
+import KID_model_functions as kids
 
 #%%
 from astropy import units as u
@@ -104,18 +105,7 @@ for cool in cdlist:
         for sweep2,scan2 in path2: # hard-coding in that each freq will be indexed by cd[sweep][scan]
             cool[sweep2][scan2]['x'] = x
             
-    ''' For each scan, translate T_BB into P_inc using the calculated table 
-        and optical transmission for that cooldown '''
-    trans = cool['T_opt']
-    for temp in list(gen_dict_extract('T_BB',cool)):
-        p_bb = TBB_to_Pinc(temp,trans=1)
-        p_inc = TBB_to_Pinc(temp,trans)
-        path3 = dictwhere(cool,'T_BB',temp)
-        for sweep3,scan3 in path3: # hard-coding in that each bb temp will be indexed by cd[sweep][scan]
-            cool[sweep3][scan3]['P_inc'] = p_inc
-            cool[sweep3][scan3]['P_BB'] = p_bb
-    
-    del path,path2,path3        
+    del path,path2        
 #%%            
 f0 = plt.figure(100)
 p0 = f0.add_subplot(111)
