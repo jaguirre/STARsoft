@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # -*- coding: utf-8 -*-
 """
 Created on Fri Aug  3 22:18:24 2018
@@ -1038,4 +1037,4 @@ def Sxx(alpha,f,Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans=1,N0
     
     return S_xx
 
->>>>>>> 5b6ca11482ecafbc05cc9a76b9d1dde913de9545
+
