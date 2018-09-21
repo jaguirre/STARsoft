@@ -137,6 +137,20 @@ def leastsq_circle(x,y):
     return xc, yc, R, residu
 
 #%%
+
+def freq_phase_func(freq,f0,Qr,th00):
+    th = -th00 + 2*np.arctan(2*Qr*(1-freq/f0))
+    return th
+
+from scipy.optimize import curve_fit
+def fit_freq_phase(freqs,S21,f00):
+    phases = np.unwrap(np.angle(S21))
+    
+    popt,pcov = curve_fit(freq_phase_func,freqs,phases,p0=(f00,1e5,0))
+    return popt,pcov
+
+#%%
+from scipy.interpolate import CubicSpline
 def streamcal(resdict,phase_poly_order):
     calI = np.real(resdict['fine']['cal S21']).value
     calQ = np.imag(resdict['fine']['cal S21']).value
@@ -158,11 +172,11 @@ def streamcal(resdict,phase_poly_order):
     # find the angle between the +I axis and the streaming freq point
     i0 = cor_calI[ind]
     q0 = cor_calQ[ind]
-    th0 = np.angle(i0+1j*q0)
+    th0 = np.unwrap(np.angle(i0+1j*q0))
     
     # rotate the IQ loop so that the streaming freq point lies on the +I axis
     rot_cor_calS21 = (cor_calI+1j*cor_calQ)*np.exp(-1j*th0)
-    phase = np.angle(rot_cor_calS21)
+    phase = np.unwrap(np.angle(rot_cor_calS21))
     
     
     # apply the shift and rotation to the noise stream
@@ -175,7 +189,21 @@ def streamcal(resdict,phase_poly_order):
     stream_rot_cor_calS21 = (stream_cor_calI+1j*stream_cor_calQ)*np.exp(-1j*th0)
     
     # find the phase range over which we have streaming data
-    stream_rot_cor_phase = np.angle(stream_rot_cor_calS21)
+    stream_rot_cor_phase = np.unwrap(np.angle(stream_rot_cor_calS21))
+    
+    popt,pcov = fit_freq_phase(freqs.value,rot_cor_calS21,f00.value)
+    f0,Qr,th0 = popt
+    
+    Qc = Qr*(np.sqrt(xc**2+yc**2)+R)/(2*R)
+    
+    phasesort = np.argsort(phase)
+    freq_phase_interp = CubicSpline(phase[phasesort],freqs[phasesort])
+    stream_freqs = freq_phase_interp(stream_rot_cor_phase)
+    
+    x_noise = (stream_freqs-f0)/f0
+    sxx_psd,sxx_freqs = plt.psd(x_noise,Fs=20000,NFFT=2**14)
+    
+                    
 
 #%%
     
