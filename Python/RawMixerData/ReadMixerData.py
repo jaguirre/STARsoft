@@ -189,6 +189,8 @@ def streamcal(resdict):
     # rotate the IQ loop so that the streaming freq point lies on the +I axis
     rot_cor_calS21 = (cor_calI+1j*cor_calQ)*np.exp(-1j*th0)
     phase = np.unwrap(np.angle(rot_cor_calS21))
+    ph0 = phase[ind]
+    if np.abs(ph0) > np.pi: phase = phase-ph0
     
     
     # apply the shift and rotation to the noise stream
@@ -265,7 +267,7 @@ def streampsd(resdict,white_freq_range=[30,100]*u.Hz):
     rho = (par_psd-perp_psd)/par_psd
     
     # calculate the sxx psd 
-    sxx_raw_psd,sxx_freqs = psdnoplot(stream_x_noise,Fs=20000,NFFT=2**14,scale_by_freq=True)
+    sxx_raw_psd,sxx_freqs = psdnoplot(stream_x_noise,Fs=streamrate,NFFT=2**14,scale_by_freq=True)
     resdict['stream']['raw Sxx'] = [sxx_freqs*u.Hz,sxx_raw_psd*invHz]
     
     # correct for the amplifier contribution
