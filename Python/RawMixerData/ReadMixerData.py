@@ -53,6 +53,13 @@ def importmixerdata(d,T_stage,T_BB,cool,folder='',Pn=0,Fn=0):
     d[Pn][Fn]['stream'] = {}
     d[Pn][Fn]['stream']['freq'] = noisefreq
     
+    # also grab the data acquisition rate of the mixer system
+    logfile = folder + 'log.txt'
+    t2 = open(logfile)
+    streamrate = u.Hz*float(t2.readlines()[4][17:-1]) # hard-coding in, merp. there must be a better way...
+    t2.close()
+    d[Pn][Fn]['stream']['streamrate'] = streamrate
+    
     # Now read in the actual noise data
     noisefile = folder + 'noiseSet0000'+ PnFn +'.bin'
     streamdata = np.fromfile(noisefile,'>f8') #first half of points are I, second half are Q
@@ -62,7 +69,7 @@ def importmixerdata(d,T_stage,T_BB,cool,folder='',Pn=0,Fn=0):
     d[Pn][Fn]['stream']['raw S21'] = u.V*streamrawI+1j*u.V*streamrawQ
 
     
-def importmixerfolder(d,T_stage,T_BB,cool,folder='',docal=True,Qignore=10**3,poly_order=5):
+def importmixerfolder(d,T_stage,T_BB,cool,folder='',docal=True,Qignore=10**3,poly_order=5,doPSD=True):
     atten_list = np.loadtxt(folder+'attenuations.txt',delimiter=',')
     freq_list = np.loadtxt(folder+'initial_f0.txt',delimiter=',')
     
@@ -71,7 +78,12 @@ def importmixerfolder(d,T_stage,T_BB,cool,folder='',docal=True,Qignore=10**3,pol
             importmixerdata(d,T_stage,T_BB,cool,folder=folder,Pn=p,Fn=f)
             if docal==True:
                 gaincal(d[p][f],Qignore,poly_order)
-
+                streamcal(d[p][f])
+            if doPSD==True:
+                streampsd(d[p][f])
+                
+                
+#%%
 
 def gaincal(resdict,Qignore=10**3,poly_order=5):
     
@@ -151,7 +163,7 @@ def fit_freq_phase(freqs,S21,f00):
 
 #%%
 from scipy.interpolate import CubicSpline
-def streamcal(resdict,phase_poly_order):
+def streamcal(resdict):
     calI = np.real(resdict['fine']['cal S21']).value
     calQ = np.imag(resdict['fine']['cal S21']).value
     
@@ -187,24 +199,82 @@ def streamcal(resdict,phase_poly_order):
     stream_cor_calQ = stream_calQ - yc
     
     stream_rot_cor_calS21 = (stream_cor_calI+1j*stream_cor_calQ)*np.exp(-1j*th0)
+    resdict['stream']['rot cor cal S21'] = stream_rot_cor_calS21
     
-    # find the phase range over which we have streaming data
+    # find the phases of the streaming data
     stream_rot_cor_phase = np.unwrap(np.angle(stream_rot_cor_calS21))
     
+    # fit the phase vs freq curve to a function
     popt,pcov = fit_freq_phase(freqs.value,rot_cor_calS21,f00.value)
-    f0,Qr,th0 = popt
+    # the fit values are f0 and Qr in a simplified resonator model
+    f0,Qr,th0 = popt 
     
+    # calculate what Qc would be in the simplified resonator model
     Qc = Qr*(np.sqrt(xc**2+yc**2)+R)/(2*R)
     
+    # save the fit values as initial guesses for a more complex model
+    resdict['f0_calc'] = f0
+    resdict['Qr_calc'] = Qr
+    resdict['Qc_calc'] = Qc
+    
+    # ensure that the phases are in order from least to greatest (could be problematic if there's a glitch??)
     phasesort = np.argsort(phase)
+    
+    # interpolate to get a function to go from phase -> freq
     freq_phase_interp = CubicSpline(phase[phasesort],freqs[phasesort])
-    stream_freqs = freq_phase_interp(stream_rot_cor_phase)
     
-    x_noise = (stream_freqs-f0)/f0
-    sxx_psd,sxx_freqs = plt.psd(x_noise,Fs=20000,NFFT=2**14)
+    # plug the streaming points into the conversion function to get a frequency timestream
+    stream_freq_noise = freq_phase_interp(stream_rot_cor_phase)
     
-                    
+    # use the f0 value to convert to fractional frequency noise
+    x_noise = (stream_freq_noise-f0)/f0
+    resdict['stream']['x noise'] = x_noise
 
+#%%    
+def whitenoise(noise_spectrum,white_freq_range):
+    freqs = noise_spectrum[0]
+    psd = noise_spectrum[1]
+    
+    start_freq = white_freq_range[0]
+    start_ind = np.max(np.where(freqs<start_freq)) + 1
+
+    stop_freq = white_freq_range[1]
+    stop_ind = np.min(np.where(freqs>stop_freq))
+    
+    white_level = np.average(psd[start_ind:stop_ind])
+    return white_level
+
+#%% 
+from matplotlib.mlab import psd as psdnoplot
+invHz = np.power(u.Hz,-1)
+
+def streampsd(resdict,white_freq_range=[30,100]*u.Hz):
+    stream_rot_cor_calS21 = resdict['stream']['rot cor cal S21']
+    stream_x_noise = resdict['stream']['x noise']
+    streamrate = ((resdict['stream']['streamrate']).to(u.Hz)).value
+    
+    
+    # calculate the parallel and perpendicular contributions to the noise
+    perp_psd,perp_freqs = psdnoplot(stream_rot_cor_calS21.real,Fs=streamrate,NFFT=2**14,scale_by_freq=True)
+    resdict['stream']['perp'] = [perp_freqs*u.Hz,perp_psd*invHz]
+
+    par_psd,par_freqs = psdnoplot(stream_rot_cor_calS21.imag,Fs=streamrate,NFFT=2**14,scale_by_freq=True)
+    resdict['stream']['par'] = [par_freqs*u.Hz,par_psd*invHz]
+    
+    # approximate the amplifier/electronic noise contribution to the total measured nosie
+    rho = (par_psd-perp_psd)/par_psd
+    
+    # calculate the sxx psd 
+    sxx_raw_psd,sxx_freqs = psdnoplot(stream_x_noise,Fs=20000,NFFT=2**14,scale_by_freq=True)
+    resdict['stream']['raw Sxx'] = [sxx_freqs*u.Hz,sxx_raw_psd*invHz]
+    
+    # correct for the amplifier contribution
+    resdict['stream']['amp sub Sxx'] = [sxx_freqs[1:]*u.Hz,rho[1:]*sxx_raw_psd[1:]*invHz]
+
+    # calculate the white noise levels
+    resdict['stream']['raw Sxx white'] = whitenoise(resdict['stream']['raw Sxx'],white_freq_range)
+    resdict['stream']['amp sub Sxx white'] = whitenoise(resdict['stream']['amp sub Sxx'],white_freq_range)
+    
 #%%
     
 testdict = {}
