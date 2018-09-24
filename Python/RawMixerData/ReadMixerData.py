@@ -160,6 +160,20 @@ def fit_freq_phase(freqs,S21,f00):
     
     popt,pcov = curve_fit(freq_phase_func,freqs,phases,p0=(f00,1e5,0))
     return popt,pcov
+#%%
+from astropy.stats import sigma_clip
+import scipy.signal as sig
+def deglitch(S21,clip_sigma=5,clip_iters=5):
+    I_orig = S21.real
+    Q_orig = S21.imag
+    
+    I_sc = sigma_clip(I_orig,sigma=clip_sigma,iters=clip_iters)
+    Q_sc = sigma_clip(Q_orig,sigma=clip_sigma,iters=clip_iters)
+    
+    good_data = ~np.logical_or(I_sc.mask,Q_sc.mask)
+    S21_deglitched = I_orig[good_data] + 1j*Q_orig[good_data]
+    
+    return S21_deglitched
 
 #%%
 from scipy.interpolate import CubicSpline
@@ -200,11 +214,14 @@ def streamcal(resdict):
     stream_cor_calI = stream_calI - xc
     stream_cor_calQ = stream_calQ - yc
     
-    stream_rot_cor_calS21 = (stream_cor_calI+1j*stream_cor_calQ)*np.exp(-1j*th0)
-    resdict['stream']['rot cor cal S21'] = stream_rot_cor_calS21
+    stream_rot_cor_calS21_raw = (stream_cor_calI+1j*stream_cor_calQ)*np.exp(-1j*th0)
+    resdict['stream']['rot cor cal S21 raw'] = stream_rot_cor_calS21_raw
+    
+    stream_rot_cor_calS21_degl = deglitch(stream_rot_cor_calS21_raw)
+    resdict['stream']['rot cor cal S21 deglitched'] = stream_rot_cor_calS21_degl
     
     # find the phases of the streaming data
-    stream_rot_cor_phase = np.unwrap(np.angle(stream_rot_cor_calS21))
+    stream_rot_cor_phase = np.unwrap(np.angle(stream_rot_cor_calS21_degl))
     
     # fit the phase vs freq curve to a function
     popt,pcov = fit_freq_phase(freqs.value,rot_cor_calS21,f00.value)
@@ -251,7 +268,7 @@ from matplotlib.mlab import psd as psdnoplot
 invHz = np.power(u.Hz,-1)
 
 def streampsd(resdict,white_freq_range=[30,100]*u.Hz):
-    stream_rot_cor_calS21 = resdict['stream']['rot cor cal S21']
+    stream_rot_cor_calS21 = resdict['stream']['rot cor cal S21 deglitched']
     stream_x_noise = resdict['stream']['x noise']
     streamrate = ((resdict['stream']['streamrate']).to(u.Hz)).value
     
@@ -278,7 +295,6 @@ def streampsd(resdict,white_freq_range=[30,100]*u.Hz):
     resdict['stream']['amp sub Sxx white'] = whitenoise(resdict['stream']['amp sub Sxx'],white_freq_range)
     
 #%%
-    
 testdict = {}
 folder = '20180607/Noise01/'
 T_stage = 0.215*u.K
@@ -286,6 +302,94 @@ T_BB = 5.61*u.K
 cool = 'CD012'
 importmixerfolder(testdict,T_stage,T_BB,cool,folder,docal=True,Qignore=10**3,poly_order=5) 
 
+#%%
+    
+plt.figure(-1)
+colors = ['r','g','b','c']
+for pn in np.arange(0,9):
+#    print('pn = ' + str(pn))
+    for fn in np.arange(0,4):
+        plt.plot(testdict[pn][fn]['LB_atten'],testdict[pn][fn]['stream']['raw Sxx white'],'+',color=colors[fn])
+#        print('fn = ' + str(fn))
+#        print(testdict[pn][fn]['stream']['raw Sxx white'])
+        
+#%%
+plt.figure(-2)
+comb_freqs = np.concatenate((resdict['med']['freqs'],resdict['fine']['freqs']))
+inds = np.argsort(comb_freqs)
+comb_s21 = np.concatenate((resdict['med']['cal S21'],resdict['fine']['cal S21']))
+freqs = comb_freqs[inds]
+S21 = comb_s21[inds]
+plt.plot(freqs,np.abs(S21),'ko')
+Qrt = resdict['Qr_calc']
+Qct = resdict['Qc_calc']
+f0t = resdict['f0_calc']
+S21t = S21_linear(freqs.value,f0t,Qrt,Qct)
+plt.plot(freqs,np.abs(S21t),'m--')
+
+it = S21.real
+qt = S21.imag
+S21t = np.concatenate((it,qt))
+
+p0t = (f0t,Qrt,Qct,0)
+boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-1],[resdict['fine']['freqs'].max().value,1e6,1e6,1])
+res_popt,res_pcov = curve_fit(fit_S21_nonlinear,freqs.value,S21t,p0=p0t,bounds=boundst)
+plt.plot(freqs,np.abs(S21_nonlinear(freqs,*res_popt)),'c-')
+#%%
+def S21_linear(fr,f0,Qr,Qc):
+    x = (fr-f0)/f0
+    S21 = 1-(Qr/Qc)*np.power(1+2*1j*Qr*x,-1)
+    return S21
+
+#def S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+#    y0 = (fr-f0)/f0
+#    
+#    # solution to y=y0+a_nl/(1+4*y**2) as stated in McCarrick 2014 appendix (original reference is Swenson 2013):
+#    k2 = np.power(((y0**3/27 + y0/12 + a_nl/8)**2 - (y0**2/9-1/12)**3),1/2)
+#    
+#    k1 = np.power((a_nl/8 + y0/12 + k2 + y0**3/27),1/3)
+#    
+#    y = y0/3 + ((y0**2/9 - 1/12)/k1) + k1
+#    
+#    x = y/Qr 
+#    
+#    S21 = 1-(Qr/Qc)*(1+1j*chi)*np.power(1+2*1j*Qr*x,-1)
+#    return S21
+
+def S21_nonlinear(fr,f0,Qr,Qe,a_nl):
+    y0 = (fr-f0)/f0
+    
+    # solution to y=y0+a_nl/(1+4*y**2) as stated in McCarrick 2014 appendix (original reference is Swenson 2013):
+    k2 = np.power(((y0**3/27 + y0/12 + a_nl/8)**2 - (y0**2/9-1/12)**3),1/2)
+    
+    k1 = np.power((a_nl/8 + y0/12 + k2 + y0**3/27),1/3)
+    
+    y = y0/3 + ((y0**2/9 - 1/12)/k1) + k1
+    
+    x = y/Qr 
+    
+    S21 = 1-(Qr/Qe)*np.power(1+2*1j*Qr*x,-1)
+    return S21
+
+
+def I_nonlinear(fr,f0,Qr,Qc,a_nl):
+    S21 = S21_nonlinear(fr,f0,Qr,Qc,a_nl)
+    I = S21.real
+    return I
+
+def Q_nonlinear(fr,f0,Qr,Qc,a_nl):
+    S21 = S21_nonlinear(fr,f0,Qr,Qc,a_nl)
+    Q = S21.imag
+    return Q
+
+def fit_S21_nonlinear(fr,f0,Qr,Qc,a_nl):
+    I = I_nonlinear(fr,f0,Qr,Qc,a_nl)
+    Q = Q_nonlinear(fr,f0,Qr,Qc,a_nl)
+    
+    glom = np.concatenate((I,Q))
+    return glom
+#%%
+        
 t1 = testdict[0][0]
 f1 = t1['gain']['freqs']
 rawI1 = np.real(t1['gain']['raw S21'])
