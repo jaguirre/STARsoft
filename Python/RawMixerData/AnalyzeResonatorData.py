@@ -4,6 +4,8 @@ Created on Mon Sep 24 10:15:03 2018
 
 @author: Alyssa
 """
+import numpy as np
+from astropy import units as u
 
 #%%
 

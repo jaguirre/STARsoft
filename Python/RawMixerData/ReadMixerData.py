@@ -8,6 +8,7 @@ Created on Wed Sep  5 09:54:53 2018
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy import units as u
+from AnalyzeResonatorData import *
 
 import warnings
 warnings.simplefilter('ignore',np.RankWarning)
@@ -104,114 +105,127 @@ for pn in np.arange(0,9):
 #        print('fn = ' + str(fn))
 #        print(testdict[pn][fn]['stream']['raw Sxx white'])
         
-#%%
-plt.figure(-2)
-comb_freqs = np.concatenate((resdict['med']['freqs'],resdict['fine']['freqs']))
-inds = np.argsort(comb_freqs)
-comb_s21 = np.concatenate((resdict['med']['cal S21'],resdict['fine']['cal S21']))
-freqs = comb_freqs[inds]
-S21 = comb_s21[inds]
-plt.plot(freqs,np.abs(S21),'ko')
-Qrt = resdict['Qr_calc']
-Qct = resdict['Qc_calc']
-f0t = resdict['f0_calc']
-S21t = S21_linear(freqs.value,f0t,Qrt,Qct)
-plt.plot(freqs,np.abs(S21t),'m--')
-
-it = S21.real
-qt = S21.imag
-S21t = np.concatenate((it,qt))
-
-p0t = (f0t,Qrt,Qct,0,0)
-boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,0,-1],[resdict['fine']['freqs'].max().value,1e6,1e6,np.inf,1])
-res_popt,res_pcov = curve_fit(fit_S21_nonlinear,freqs.value,S21t,p0=p0t,bounds=boundst)
-plt.plot(freqs,np.abs(S21_nonlinear(freqs,*res_popt)),'c-')
-#%%
-chi = 0
-plt.figure('test grr')
-plt.plot(freqs,np.abs(S21_nonlinear(freqs,f0t,Qrt,Qct,chi,0)),'b.')
 
 #%%
-#%%
+#from scipy.optimize import root
+#def yfunc(vec):
+#    y = vec[0]
+#    y0 = vec[1]
+#    a = vec[2]
+#    y = y0 + a/(1+4*y**2)
+#    return y
+#
+#from scipy.optimize import fsolve
+#fsolve(lambda y: y-Qrt*f0t*(1+4*y**2)-a)   
+#
+#def yfunc(y):
+#    val = (y-y0)*(1+4*y**2)-a_nl
+#    return val
+#        
+#%%        
 def S21_linear(fr,f0,Qr,Qc):
     x = (fr-f0)/f0
     S21 = 1-(Qr/Qc)*np.power(1+2*1j*Qr*x,-1)
     return S21
 
-#def S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
-#    y0 = (fr-f0)/f0
-#    
-#    # solution to y=y0+a_nl/(1+4*y**2) as stated in McCarrick 2014 appendix (original reference is Swenson 2013):
-#    k2 = np.power(((y0**3/27 + y0/12 + a_nl/8)**2 - (y0**2/9-1/12)**3),1/2)
+def S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+    y0 = Qr*(fr-f0)/f0
+    
+    # solution to y=y0+a_nl/(1+4*y**2) as stated in McCarrick 2014 appendix (original reference is Swenson 2013):
+#    k2 = np.power(((y0**3/27 + y0/12 + a_nl/8)**2 - (y0**2/9-1/12)**3)+0j,1/2)
 #    
 #    k1 = np.power((a_nl/8 + y0/12 + k2 + y0**3/27),1/3)
 #    
 #    y = y0/3 + ((y0**2/9 - 1/12)/k1) + k1
-#    
-#    x = y/Qr 
-#    
-#    S21 = 1-(Qr/Qc)*(1+1j*chi)*np.power(1+2*1j*Qr*x,-1)
-#    return S21
+    
+    yt = np.zeros_like(fr)
+    for ind,fn in enumerate(fr):
+        p = [1,-y0[ind],.25,-.25*(y0[ind]+a_nl)]
+        sol = np.roots(p)
+        ytn = sol[np.isreal(sol)]
+        yt[ind] = ytn[0]
 
-def S21_nonlinear(fr,f0,Qr,Qc,chi_real,chi_complex,a_nl):
-    y0 = (fr-f0)/f0
+    x = yt/Qr 
     
-    # solution to y=y0+a_nl/(1+4*y**2) as stated in McCarrick 2014 appendix (original reference is Swenson 2013):
-    k2 = np.power(((y0**3/27 + y0/12 + a_nl/8)**2 - (y0**2/9-1/12)**3),1/2)
-    
-    k1 = np.power((a_nl/8 + y0/12 + k2 + y0**3/27),1/3)
-    
-    y = y0/3 + ((y0**2/9 - 1/12)/k1) + k1
-    
-    x = y/Qr 
-    
-    chi = chi_real + 1j*chi_complex
     S21 = 1-(Qr/Qc)*(1+1j*chi)*np.power(1+2*1j*Qr*x,-1)
     return S21
 
 
-def I_nonlinear(fr,f0,Qr,Qc,chi_real,chi_complex,a_nl):
-    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi_real,chi_complex,a_nl)
+def I_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
     I = S21.real
     return I
 
-def Q_nonlinear(fr,f0,Qr,Qc,chi_real,chi_complex,a_nl):
-    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi_real,chi_complex,a_nl)
+def Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
     Q = S21.imag
     return Q
 
-def fit_S21_nonlinear(fr,f0,Qr,Qc,chi_real,chi_complex,a_nl):
-    I = I_nonlinear(fr,f0,Qr,Qc,chi_real,chi_complex,a_nl)
-    Q = Q_nonlinear(fr,f0,Qr,Qc,chi_real,chi_complex,a_nl)
+def fit_S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+    I = I_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
+    Q = Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
     
     glom = np.concatenate((I,Q))
     return glom
 #%%
-        
-t1 = testdict[0][0]
-f1 = t1['gain']['freqs']
-rawI1 = np.real(t1['gain']['raw S21'])
-rawQ1 = np.imag(t1['gain']['raw S21'])
-calI1 = np.real(t1['gain']['cal S21'])
-calQ1 = np.imag(t1['gain']['cal S21'])
+resdict = testdict[2][2]
+plt.figure(-5)
+comb_freqs = np.concatenate(((resdict['med']['freqs'].to(u.Hz)).value,(resdict['fine']['freqs'].to(u.Hz)).value))
+inds = np.argsort(comb_freqs)
+comb_s21 = np.concatenate((resdict['med']['cal S21'],resdict['fine']['cal S21']))
+freqs = u.Hz*comb_freqs[inds]
+S21 = comb_s21[inds]
+plt.plot(freqs,np.abs(S21),'ko',label='med and fine data')
+Qrt = resdict['Qr_calc']
+Qct = resdict['Qc_calc']
+f0t = resdict['f0_calc']
+S21t = S21_linear(freqs.value,f0t,Qrt,Qct)
+plt.plot(freqs,np.abs(S21t),'m--',label='cal simple model')
 
-plt.plot(rawI1,rawQ1,'r.')
-plt.plot(calI1,calQ1,'b.')
-    
-rawI2 = np.real(t1['fine']['raw S21'])
-rawQ2 = np.imag(t1['fine']['raw S21'])
-calI2 = np.real(t1['fine']['cal S21'])
-calQ2 = np.imag(t1['fine']['cal S21'])
+it = S21.real
+qt = S21.imag
+S21tofit = np.concatenate((it,qt))
 
-plt.plot(rawI2,rawQ2,'m.')
-plt.plot(calI2,calQ2,'c.')
-plt.plot(1,0,'kx')
+p0t = (f0t,Qrt,Qct,0,0)
+boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.inf,-1],[resdict['fine']['freqs'].max().value,1e6,1e8,np.inf,1])
+res_popt,res_pcov = curve_fit(fit_S21_nonlinear,freqs.value,S21tofit,p0=p0t,bounds=boundst)
+plt.plot(freqs,np.abs(S21_nonlinear(freqs.value,*res_popt)),'c-',label='nonlinear S21 fit')
+plt.xlabel('freq (Hz)')
+plt.ylabel('|S21|')
+plt.legend(loc='lower left')
+#%%
+chi = 0
+plt.figure('test grr')
+plt.plot(freqs,np.abs(S21_nonlinear(freqs,f0t,Qrt,Qct,chi,0)),'b.')
 
-xc,yc,R,resid = leastsq_circle(calI2.value,calQ2.value)
 
-from matplotlib.patches import Circle
 
-fig, ax = plt.subplots()
-ax.add_artist(Circle((xc,yc),R,fill=False))
-
-    
+#%%
+#        
+#t1 = testdict[0][0]
+#f1 = t1['gain']['freqs']
+#rawI1 = np.real(t1['gain']['raw S21'])
+#rawQ1 = np.imag(t1['gain']['raw S21'])
+#calI1 = np.real(t1['gain']['cal S21'])
+#calQ1 = np.imag(t1['gain']['cal S21'])
+#
+#plt.plot(rawI1,rawQ1,'r.')
+#plt.plot(calI1,calQ1,'b.')
+#    
+#rawI2 = np.real(t1['fine']['raw S21'])
+#rawQ2 = np.imag(t1['fine']['raw S21'])
+#calI2 = np.real(t1['fine']['cal S21'])
+#calQ2 = np.imag(t1['fine']['cal S21'])
+#
+#plt.plot(rawI2,rawQ2,'m.')
+#plt.plot(calI2,calQ2,'c.')
+#plt.plot(1,0,'kx')
+#
+#xc,yc,R,resid = leastsq_circle(calI2.value,calQ2.value)
+#
+#from matplotlib.patches import Circle
+#
+#fig, ax = plt.subplots()
+#ax.add_artist(Circle((xc,yc),R,fill=False))
+#
+#    
