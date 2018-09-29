@@ -87,15 +87,17 @@ def fit_freq_phase(freqs,S21,f00):
 from astropy.stats import sigma_clip
 import scipy.signal as sig
 def deglitch(S21,clip_sigma=5,clip_iters=5):
-    I_orig = S21.real
-    Q_orig = S21.imag
-    
-    I_sc = sigma_clip(I_orig,sigma=clip_sigma,iters=clip_iters)
-    Q_sc = sigma_clip(Q_orig,sigma=clip_sigma,iters=clip_iters)
-    
-    good_data = ~np.logical_or(I_sc.mask,Q_sc.mask)
-    S21_deglitched = I_orig[good_data] + 1j*Q_orig[good_data]
-    
+    ''' Not doing anything right now!!! '''
+#    I_orig = S21.real
+#    Q_orig = S21.imag
+#    
+#    I_sc = sigma_clip(I_orig,sigma=clip_sigma,iters=clip_iters)
+#    Q_sc = sigma_clip(Q_orig,sigma=clip_sigma,iters=clip_iters)
+#    
+#    good_data = ~np.logical_or(I_sc.mask,Q_sc.mask)
+#    S21_deglitched = I_orig[good_data] + 1j*Q_orig[good_data]
+#    
+    S21_deglitched = S21
     return S21_deglitched
 
 #%%
@@ -113,7 +115,11 @@ def streamcal(resdict):
     
     # find the calibration point corresponding to the streaming freq point
     freqs = resdict['fine']['freqs']
-    f00 = resdict['stream']['freq']
+    try: f00 = resdict['stream']['freq']
+    except KeyError: 
+        m = (np.diff(abs(calI+1j*calQ)))/(np.diff(freqs))
+        maxm = np.max(np.abs(m))
+        f00 = freqs[(np.where(abs(m)==maxm)[0]+1)]
     
     ind = np.where(freqs==f00)[0] 
     if ind.size==0: ind = np.max(np.where(freqs<f00)) # not sure if the mixer always chooses an exact point or not
@@ -129,18 +135,30 @@ def streamcal(resdict):
     ph0 = phase[ind]
     if np.abs(ph0) > np.pi: phase = phase-ph0
     
+    resdict['fine']['rot cor cal S21'] = rot_cor_calS21
+
+    scans = ['med','gain','rough','stream']
+    for scan in scans:
+        try: 
+            raw = resdict[scan]['cal S21'] 
+            iraw = (raw.real).value
+            qraw = (raw.imag).value
+            cor_cal = ((iraw - xc) + 1j*(qraw - yc))*np.exp(-1j*th0)
+            resdict[scan]['rot cor cal S21'] = cor_cal
+        except KeyError: exit # if one of the scan types doesn't exist for this resonator           
     
     # apply the shift and rotation to the noise stream
-    stream_calI = np.real(resdict['stream']['cal S21']).value
-    stream_calQ = np.imag(resdict['stream']['cal S21']).value
+#    stream_calI = np.real(resdict['stream']['cal S21']).value
+#    stream_calQ = np.imag(resdict['stream']['cal S21']).value
+#    
+#    stream_cor_calI = stream_calI - xc
+#    stream_cor_calQ = stream_calQ - yc
+#    
+#    stream_rot_cor_calS21_raw = (stream_cor_calI+1j*stream_cor_calQ)*np.exp(-1j*th0)
+#    resdict['stream']['rot cor cal S21 raw'] = stream_rot_cor_calS21_raw
     
-    stream_cor_calI = stream_calI - xc
-    stream_cor_calQ = stream_calQ - yc
-    
-    stream_rot_cor_calS21_raw = (stream_cor_calI+1j*stream_cor_calQ)*np.exp(-1j*th0)
-    resdict['stream']['rot cor cal S21 raw'] = stream_rot_cor_calS21_raw
-    
-    stream_rot_cor_calS21_degl = deglitch(stream_rot_cor_calS21_raw)
+#    stream_rot_cor_calS21_degl = deglitch(stream_rot_cor_calS21_raw)
+    stream_rot_cor_calS21_degl = deglitch(resdict['stream']['rot cor cal S21'])
     resdict['stream']['rot cor cal S21 deglitched'] = stream_rot_cor_calS21_degl
     
     # find the phases of the streaming data
@@ -171,6 +189,71 @@ def streamcal(resdict):
     # use the f0 value to convert to fractional frequency noise
     x_noise = (stream_freq_noise-f0)/f0
     resdict['stream']['x noise'] = x_noise
+
+#%%        
+def S21_linear(fr,f0,Qr,Qc):
+    x = (fr-f0)/f0
+    S21 = 1-(Qr/Qc)*np.power(1+2*1j*Qr*x,-1)
+    return S21
+
+def S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+    y0 = Qr*(fr-f0)/f0
+    
+    # want to solve: y=y0+a_nl/(1+4*y**2) --> 0 = 1*y**3 - y0*y**2 + .25*y - .25(y0+a_nl)
+    # (original reference is Swenson 2013):    
+    yt = np.zeros_like(fr)
+    for ind,fn in enumerate(fr):
+        p = [1,-y0[ind],.25,-.25*(y0[ind]+a_nl)]
+        sol = np.roots(p)
+        ytn = sol[np.isreal(sol)].real
+        if ind==0: yt[ind] = ytn[0] # near the edges of the resonance, there should only be one root
+        else: 
+            y_rel = [abs(rt - y0[ind]) for rt in ytn]
+            yt[ind] = ytn[np.where(y_rel == np.min(y_rel))[0]]
+
+    x = yt/Qr 
+    
+    S21 = 1-(Qr/Qc)*(1+1j*chi)*np.power(1+2*1j*Qr*x,-1)
+    return S21
+
+
+def I_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
+    I = S21.real
+    return I
+
+def Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
+    Q = S21.imag
+    return Q
+
+def fit_S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+    I = I_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
+    Q = Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
+    
+    glom = np.concatenate((I,Q))
+    return glom
+#%%
+def fit_resonator_S21(resdict):
+    comb_freqs = np.concatenate(((resdict['med']['freqs'].to(u.Hz)).value,(resdict['fine']['freqs'].to(u.Hz)).value))
+    inds = np.argsort(comb_freqs)
+    comb_s21 = np.concatenate((resdict['med']['cal S21'],resdict['fine']['cal S21']))
+    freqs = u.Hz*comb_freqs[inds]
+    S21 = comb_s21[inds]
+#    plt.plot(freqs,np.abs(S21),'ko',label='med and fine data')
+    Qrt = resdict['Qr_calc']
+    Qct = resdict['Qc_calc']
+    f0t = resdict['f0_calc']
+#    S21t = S21_linear(freqs.value,f0t,Qrt,Qct)
+    #plt.plot(freqs,np.abs(S21t),'m--',label='cal simple model')
+    
+    it = S21.real
+    qt = S21.imag
+    S21tofit = np.concatenate((it,qt))
+    
+    p0t = (f0t,Qrt,Qct,0,0)
+    boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.inf,-1],[resdict['fine']['freqs'].max().value,1e6,1e8,np.inf,1])
+    res_popt,res_pcov = curve_fit(fit_S21_nonlinear,freqs.value,S21tofit,p0=p0t,bounds=boundst)
 
 #%%    
 def whitenoise(noise_spectrum,white_freq_range):

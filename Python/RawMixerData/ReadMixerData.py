@@ -95,81 +95,8 @@ cool = 'CD012'
 importmixerfolder(testdict,T_stage,T_BB,cool,folder,docal=True,Qignore=10**3,poly_order=5) 
 
 #%%
-    
-plt.figure(-1)
-colors = ['r','g','b','c']
-for pn in np.arange(0,9):
-#    print('pn = ' + str(pn))
-    for fn in np.arange(0,4):
-        plt.plot(testdict[pn][fn]['LB_atten'],testdict[pn][fn]['stream']['raw Sxx white'],'+',color=colors[fn])
-#        print('fn = ' + str(fn))
-#        print(testdict[pn][fn]['stream']['raw Sxx white'])
-        
-
-#%%
-#from scipy.optimize import root
-#def yfunc(vec):
-#    y = vec[0]
-#    y0 = vec[1]
-#    a = vec[2]
-#    y = y0 + a/(1+4*y**2)
-#    return y
-#
-#from scipy.optimize import fsolve
-#fsolve(lambda y: y-Qrt*f0t*(1+4*y**2)-a)   
-#
-#def yfunc(y):
-#    val = (y-y0)*(1+4*y**2)-a_nl
-#    return val
-#        
-#%%        
-def S21_linear(fr,f0,Qr,Qc):
-    x = (fr-f0)/f0
-    S21 = 1-(Qr/Qc)*np.power(1+2*1j*Qr*x,-1)
-    return S21
-
-def S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
-    y0 = Qr*(fr-f0)/f0
-    
-    # solution to y=y0+a_nl/(1+4*y**2) as stated in McCarrick 2014 appendix (original reference is Swenson 2013):
-#    k2 = np.power(((y0**3/27 + y0/12 + a_nl/8)**2 - (y0**2/9-1/12)**3)+0j,1/2)
-#    
-#    k1 = np.power((a_nl/8 + y0/12 + k2 + y0**3/27),1/3)
-#    
-#    y = y0/3 + ((y0**2/9 - 1/12)/k1) + k1
-    
-    yt = np.zeros_like(fr)
-    for ind,fn in enumerate(fr):
-        p = [1,-y0[ind],.25,-.25*(y0[ind]+a_nl)]
-        sol = np.roots(p)
-        ytn = sol[np.isreal(sol)]
-        yt[ind] = ytn[0]
-
-    x = yt/Qr 
-    
-    S21 = 1-(Qr/Qc)*(1+1j*chi)*np.power(1+2*1j*Qr*x,-1)
-    return S21
-
-
-def I_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
-    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
-    I = S21.real
-    return I
-
-def Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
-    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
-    Q = S21.imag
-    return Q
-
-def fit_S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
-    I = I_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
-    Q = Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
-    
-    glom = np.concatenate((I,Q))
-    return glom
-#%%
 resdict = testdict[2][2]
-plt.figure(-5)
+plt.figure(-6)
 comb_freqs = np.concatenate(((resdict['med']['freqs'].to(u.Hz)).value,(resdict['fine']['freqs'].to(u.Hz)).value))
 inds = np.argsort(comb_freqs)
 comb_s21 = np.concatenate((resdict['med']['cal S21'],resdict['fine']['cal S21']))
@@ -194,9 +121,39 @@ plt.xlabel('freq (Hz)')
 plt.ylabel('|S21|')
 plt.legend(loc='lower left')
 #%%
-chi = 0
-plt.figure('test grr')
-plt.plot(freqs,np.abs(S21_nonlinear(freqs,f0t,Qrt,Qct,chi,0)),'b.')
+#chi = 0
+#plt.figure('test grr')
+#plt.plot(freqs,np.abs(S21_nonlinear(freqs,f0t,Qrt,Qct,chi,0)),'b.')
+##%%
+#
+#for sweep,scan in testdict:
+#    resdict = testdict[sweep][scan]
+#    comb_freqs = np.concatenate(((resdict['med']['freqs'].to(u.Hz)).value,(resdict['fine']['freqs'].to(u.Hz)).value))
+#    inds = np.argsort(comb_freqs)
+#    comb_s21 = np.concatenate((resdict['med']['cal S21'],resdict['fine']['cal S21']))
+#    freqs = u.Hz*comb_freqs[inds]
+#    S21 = comb_s21[inds]
+#    plt.plot(freqs,np.abs(S21),'ko',label='med and fine data')
+#    Qrt = resdict['Qr_calc']
+#    Qct = resdict['Qc_calc']
+#    f0t = resdict['f0_calc']
+#    S21t = S21_linear(freqs.value,f0t,Qrt,Qct)
+#    plt.plot(freqs,np.abs(S21t),'m--',label='cal simple model')
+#    
+#    it = S21.real
+#    qt = S21.imag
+#    S21tofit = np.concatenate((it,qt))
+#    
+#    p0t = (f0t,Qrt,Qct,0,0)
+#    boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.inf,-1],[resdict['fine']['freqs'].max().value,1e6,1e8,np.inf,1])
+#    res_popt,res_pcov = curve_fit(fit_S21_nonlinear,freqs.value,S21tofit,p0=p0t,bounds=boundst)
+#    plt.plot(freqs,np.abs(S21_nonlinear(freqs.value,*res_popt)),'c-',label='nonlinear S21 fit')
+#    plt.xlabel('freq (Hz)')
+#    plt.ylabel('|S21|')
+#    plt.legend(loc='lower left')
+#    
+#    a = res_popt
+#    plt.title('fit vals: ' + 'f0 = ' + str(a[0]) + ', Qr = ' + str(a[1]) + ', Qc = ' + str(a[2]) + ', chi = ' + str(a[3]) + ', anl = ' + str(a[4]),fontsize=8)
 
 
 
