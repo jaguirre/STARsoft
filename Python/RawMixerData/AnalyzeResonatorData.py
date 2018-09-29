@@ -116,6 +116,8 @@ def streamcal(resdict):
     # find the calibration point corresponding to the streaming freq point
     freqs = resdict['fine']['freqs']
     try: f00 = resdict['stream']['freq']
+    
+    # if there's no streaming data, find the point in the fine sweep with the greatest slope dS21/df
     except KeyError: 
         m = (np.diff(abs(calI+1j*calQ)))/(np.diff(freqs))
         maxm = np.max(np.abs(m))
@@ -147,23 +149,6 @@ def streamcal(resdict):
             resdict[scan]['rot cor cal S21'] = cor_cal
         except KeyError: exit # if one of the scan types doesn't exist for this resonator           
     
-    # apply the shift and rotation to the noise stream
-#    stream_calI = np.real(resdict['stream']['cal S21']).value
-#    stream_calQ = np.imag(resdict['stream']['cal S21']).value
-#    
-#    stream_cor_calI = stream_calI - xc
-#    stream_cor_calQ = stream_calQ - yc
-#    
-#    stream_rot_cor_calS21_raw = (stream_cor_calI+1j*stream_cor_calQ)*np.exp(-1j*th0)
-#    resdict['stream']['rot cor cal S21 raw'] = stream_rot_cor_calS21_raw
-    
-#    stream_rot_cor_calS21_degl = deglitch(stream_rot_cor_calS21_raw)
-    stream_rot_cor_calS21_degl = deglitch(resdict['stream']['rot cor cal S21'])
-    resdict['stream']['rot cor cal S21 deglitched'] = stream_rot_cor_calS21_degl
-    
-    # find the phases of the streaming data
-    stream_rot_cor_phase = np.unwrap(np.angle(stream_rot_cor_calS21_degl))
-    
     # fit the phase vs freq curve to a function
     popt,pcov = fit_freq_phase(freqs.value,rot_cor_calS21,f00.value)
     # the fit values are f0 and Qr in a simplified resonator model
@@ -177,19 +162,42 @@ def streamcal(resdict):
     resdict['Qr_calc'] = Qr
     resdict['Qc_calc'] = Qc
     
-    # ensure that the phases are in order from least to greatest (could be problematic if there's a glitch??)
-    phasesort = np.argsort(phase)
-    
-    # interpolate to get a function to go from phase -> freq
-    freq_phase_interp = CubicSpline(phase[phasesort],freqs[phasesort])
-    
-    # plug the streaming points into the conversion function to get a frequency timestream
-    stream_freq_noise = freq_phase_interp(stream_rot_cor_phase)
-    
-    # use the f0 value to convert to fractional frequency noise
-    x_noise = (stream_freq_noise-f0)/f0
-    resdict['stream']['x noise'] = x_noise
+    resdict['freq-phase plot'] = {}
+    resdict['freq-phase plot']['fine data (rot cor cal)'] = [phase,(freqs-f00)/f00]
+    resdict['freq-phase plot']['fine fit to function'] = [freq_phase_func(freqs.value,*popt),(freqs-f00)/f00]
+    resdict['freq-phase plot']['streaming freq']= [ph0,f00]
 
+    
+    # Now convert the streaming data complex phases to frequencies using the fine scan
+    try:
+        stream_rot_cor_calS21_degl = deglitch(resdict['stream']['rot cor cal S21'])
+        resdict['stream']['rot cor cal S21 deglitched'] = stream_rot_cor_calS21_degl
+        
+        # find the phases of the streaming data
+        stream_rot_cor_phase = np.unwrap(np.angle(stream_rot_cor_calS21_degl))
+        resdict['stream']['stream rot cor phase'] = stream_rot_cor_phase
+        
+        # ensure that the phases are in order from least to greatest (could be problematic if there's a glitch??)
+        phasesort = np.argsort(phase)
+        
+        # interpolate to get a function to go from phase -> freq
+        freq_phase_interp = CubicSpline(phase[phasesort],freqs[phasesort])
+        
+        # plug the streaming points into the conversion function to get a frequency timestream
+        stream_freq_noise = freq_phase_interp(stream_rot_cor_phase)
+        resdict['stream']['freq noise'] = stream_freq_noise
+        
+        # use the f0 value to convert to fractional frequency noise
+#        x_noise = (stream_freq_noise-f0)/f0
+#        resdict['stream']['x noise'] = x_noise
+#        
+#        resdict['freq-phase plot']['frequency noise'] = [stream_rot_cor_phase,(stream_freq_noise-f00.value)/f00.value]
+
+        
+        
+    except KeyError: exit
+
+    
 #%%        
 def S21_linear(fr,f0,Qr,Qc):
     x = (fr-f0)/f0
@@ -254,6 +262,12 @@ def fit_resonator_S21(resdict):
     p0t = (f0t,Qrt,Qct,0,0)
     boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.inf,-1],[resdict['fine']['freqs'].max().value,1e6,1e8,np.inf,1])
     res_popt,res_pcov = curve_fit(fit_S21_nonlinear,freqs.value,S21tofit,p0=p0t,bounds=boundst)
+    
+    resdict['f0_fit'] = res_popt[0]*u.Hz
+    resdict['Qr_fit'] = res_popt[1]*u.dimensionless_unscaled
+    resdict['Qc_fit'] = res_popt[2]*u.dimensionless_unscaled
+    resdict['Chi_fit'] = res_popt[3]*u.dimensionless_unscaled
+    resdict['anl_fit'] = res_popt[4]*u.dimensionless_unscaled
 
 #%%    
 def whitenoise(noise_spectrum,white_freq_range):
@@ -275,9 +289,13 @@ invHz = np.power(u.Hz,-1)
 
 def streampsd(resdict,white_freq_range=[30,100]*u.Hz):
     stream_rot_cor_calS21 = resdict['stream']['rot cor cal S21 deglitched']
-    stream_x_noise = resdict['stream']['x noise']
+#    stream_x_noise = resdict['stream']['x noise']
     streamrate = ((resdict['stream']['streamrate']).to(u.Hz)).value
     
+    f0_fit = resdict['f0_fit'].value
+    stream_x_noise = (resdict['stream']['freq noise']-f0_fit)/f0_fit
+    resdict['freq-phase plot']['x noise'] = [resdict['stream']['stream rot cor phase'],stream_x_noise]
+    resdict['freq-phase plot']['streaming freq'] = [resdict['freq-phase plot']['streaming freq'][0],(resdict['freq-phase plot']['streaming freq'][1].value-f0_fit)/f0_fit]
     
     # calculate the parallel and perpendicular contributions to the noise
     perp_psd,perp_freqs = psdnoplot(stream_rot_cor_calS21.real,Fs=streamrate,NFFT=2**14,scale_by_freq=True)
