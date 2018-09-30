@@ -13,7 +13,7 @@ from AnalyzeResonatorData import *
 import warnings
 warnings.simplefilter('ignore',np.RankWarning)
 
-def importmixerdata(d,T_stage,T_BB,cool,folder='',Pn=0,Fn=0):
+def importmixerdata(d,T_stage,T_BB,cool,datafolder='',outfolder='',Pn=0,Fn=0,docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5):
     Pn_label = str(Pn).zfill(2)
     Fn_label = str(Fn).zfill(2)
     PnFn = 'Pn'+Pn_label+'Fn'+Fn_label
@@ -24,22 +24,22 @@ def importmixerdata(d,T_stage,T_BB,cool,folder='',Pn=0,Fn=0):
         d[Pn] = {}
         d[Pn][Fn] = {}
     
-    atten_list = np.loadtxt(folder+'attenuations.txt',delimiter=',')
+    atten_list = np.loadtxt(datafolder+'attenuations.txt',delimiter=',')
     d[Pn][Fn]['LB_atten'] = u.dB*atten_list[Pn]
     
-    freq_list = np.loadtxt(folder+'initial_f0.txt',delimiter=',')
+    freq_list = np.loadtxt(datafolder+'initial_f0.txt',delimiter=',')
     d[Pn][Fn]['initial f0'] = freq_list[Fn]
     
     d[Pn][Fn]['T_BB'] = T_BB
     d[Pn][Fn]['T_stage'] = T_stage
-    d[Pn][Fn]['folder'] = folder
+    d[Pn][Fn]['folder'] = datafolder
     d[Pn][Fn]['CD'] = cool
     d['CD'] = cool
     
     # read in the calibration data
     types = ['fine','med','gain','rough']
     for t in types:
-        sweepfile = folder + t + 'SweepSet0000' + PnFn + '.txt'
+        sweepfile = datafolder + t + 'SweepSet0000' + PnFn + '.txt'
         try: freqs,rawI,rawQ = np.loadtxt(sweepfile,delimiter=',',skiprows=3,unpack=True)
         except OSError: print('No cal data found for ' + t + '--' + PnFn + '; moving on')
         else:
@@ -48,7 +48,7 @@ def importmixerdata(d,T_stage,T_BB,cool,folder='',Pn=0,Fn=0):
             d[Pn][Fn][t]['raw S21'] = u.V*rawI+1j*u.V*rawQ
 
     # grab the frequency at which the noise was streamed
-    noisefreqfile = folder + 'noiseFrequencySet0000' + PnFn + '.txt'
+    noisefreqfile = datafolder + 'noiseFrequencySet0000' + PnFn + '.txt'
     t1 = open(noisefreqfile)
     noisefreq = u.Hz*float(t1.readlines()[2][21:-1]) # hard-coding in, merp. there must be a better way...
     t1.close()
@@ -56,72 +56,76 @@ def importmixerdata(d,T_stage,T_BB,cool,folder='',Pn=0,Fn=0):
     d[Pn][Fn]['stream']['freq'] = noisefreq
     
     # also grab the data acquisition rate of the mixer system
-    logfile = folder + 'log.txt'
+    logfile = datafolder + 'log.txt'
     t2 = open(logfile)
     streamrate = u.Hz*float(t2.readlines()[4][17:-1]) # hard-coding in, merp. there must be a better way...
     t2.close()
     d[Pn][Fn]['stream']['streamrate'] = streamrate
     
     # Now read in the actual noise data
-    noisefile = folder + 'noiseSet0000'+ PnFn +'.bin'
+    noisefile = datafolder + 'noiseSet0000'+ PnFn +'.bin'
     streamdata = np.fromfile(noisefile,'>f8') #first half of points are I, second half are Q
     split = int(len(streamdata)/2) # find the index of the halfway point
     streamrawI = streamdata[0:split]
     streamrawQ = streamdata[split:]
     d[Pn][Fn]['stream']['raw S21'] = u.V*streamrawI+1j*u.V*streamrawQ
 
-    
-def importmixerfolder(d,T_stage,T_BB,cool,datafolder='',outfolder='',docal=True,Qignore=10**3,poly_order=5,doPSD=True,doplots=True):
-    atten_list = np.loadtxt(datafolder+'attenuations.txt',delimiter=',')
-    freq_list = np.loadtxt(datafolder+'initial_f0.txt',delimiter=',')
-    
+    ######## Saving data
     # if the folder to save data in doesn't exist, make it
     if os.path.isdir(outfolder) == False: os.mkdir(outfolder)
     
     coolfolder = outfolder+cool+'/'
     if os.path.isdir(coolfolder) == False: os.mkdir(coolfolder)
 
+
+    if docal==True:
+        gaincal(d[Pn][Fn],Qignore,poly_order)
+        streamcal(d[Pn][Fn])
+        fit_resonator_S21(d[Pn][Fn])
+    if doPSD==True:
+        streampsd(d[Pn][Fn])
+    if doplots==True:
+        Pn_label = str(Pn).zfill(2)
+        Fn_label = str(Fn).zfill(2)
+        PnFn = 'Pn'+Pn_label+'Fn'+Fn_label
+
+        resdict = d[Pn][Fn]
+        # plot freq vs phase conversion step
+        fig1name = coolfolder+'freq-phase-plot_'+cool+PnFn+'.png'
+        fig1 = plt.figure(fig1name)
+        p1 = fig1.add_subplot(111)
+        p1.plot(*resdict['freq-phase plot']['fine data (rot cor cal)'],'o',color='c',label='fine data (rot cor cal)')
+        p1.plot(*resdict['freq-phase plot']['fine fit to function'],'-',color='darkblue',label='fine fit to function')
+        p1.plot(*resdict['freq-phase plot']['x noise'],'.',color='k',label='frequency noise')
+#                p1.axhline(y=resdict['f0_calc'],linestyle='--',color='g',alpha=0.5,label='f0_calc')
+        p1.plot(*resdict['freq-phase plot']['streaming freq'],'*',color='magenta',markersize=9,label='streaming freq')
+        p1.legend(loc='lower left',frameon=True)
+        p1.set_xlabel('phase (radians)',fontsize=12)
+        p1.set_ylabel('df/f',fontsize=12)
+        p1.set_title(cool+PnFn)
+        p1.grid(linestyle=':',axis='both',alpha=0.5)
+        p1.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        fig1.savefig(fig1name)
+        plt.close(1)
+        
+        # plot resonator line profile fit step
+        
+        # plot PSDs and Sxx
+
+    
+def importmixerfolder(d,T_stage,T_BB,cool,datafolder='',outfolder='',docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5):
+    atten_list = np.loadtxt(datafolder+'attenuations.txt',delimiter=',')
+    freq_list = np.loadtxt(datafolder+'initial_f0.txt',delimiter=',')
+    
+
     for p in np.arange(0,len(atten_list)):
         for f in np.arange(0,len(freq_list)):
-            importmixerdata(d,T_stage,T_BB,cool,folder=datafolder,Pn=p,Fn=f)
-            if docal==True:
-                gaincal(d[p][f],Qignore,poly_order)
-                streamcal(d[p][f])
-                fit_resonator_S21(d[p][f])
-            if doPSD==True:
-                streampsd(d[p][f])
-            if doplots==True:
-                Pn_label = str(p).zfill(2)
-                Fn_label = str(f).zfill(2)
-                PnFn = 'Pn'+Pn_label+'Fn'+Fn_label
-
-                resdict = d[p][f]
-                # plot freq vs phase conversion step
-                fig1name = coolfolder+'freq-phase-plot_'+cool+PnFn+'.png'
-                fig1 = plt.figure(1)
-                p1 = fig1.add_subplot(111)
-                p1.plot(*resdict['freq-phase plot']['fine data (rot cor cal)'],'o',color='c',label='fine data (rot cor cal)')
-                p1.plot(*resdict['freq-phase plot']['fine fit to function'],'-',color='darkblue',label='fine fit to function')
-                p1.plot(*resdict['freq-phase plot']['x noise'],'.',color='k',label='frequency noise')
-#                p1.axhline(y=resdict['f0_calc'],linestyle='--',color='g',alpha=0.5,label='f0_calc')
-                p1.plot(*resdict['freq-phase plot']['streaming freq'],'*',color='magenta',markersize=9,label='streaming freq')
-                p1.legend(loc='lower left',frameon=True)
-                p1.set_xlabel('phase (radians)',fontsize=12)
-                p1.set_ylabel('frequency (Hz)',fontsize=12)
-                p1.set_title(cool+PnFn,fontsize=12)
-                p1.grid(linestyle=':',axis='both',alpha=0.5)
-                fig1.savefig(fig1name)
-                plt.close(1)
-                
-                # plot resonator line profile fit step
-                
-                # plot PSDs and Sxx
+            importmixerdata(d,T_stage,T_BB,cool,datafolder,outfolder,p,f,docal,doPSD,doplots)
 
 
 import deepdish as dd
 import os
-def savedatadict(testdict,outfolder,doplots=True):
-
+def savedatadict(testdict,outfolder):
     dictname = coolfolder+cool+'_datadict.hdf5'
     dd.io.save(dictname,testdict)
     
@@ -134,7 +138,8 @@ T_stage = 0.215*u.K
 T_BB = 5.61*u.K
 cool = 'CD012'
 outfolder = 'C:/Users/Alyssa/Penn Google Drive/Penn & NSTRF/Caltech Devices/' + 'test/'
-importmixerfolder(testdict,T_stage,T_BB,cool,datafolder,outfolder,docal=True,Qignore=10**3,poly_order=5) 
+#importmixerdata(testdict,T_stage,T_BB,cool,datafolder,outfolder,Pn=1,Fn=1,docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5)
+importmixerfolder(testdict,T_stage,T_BB,cool,datafolder,outfolder,docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5) 
 
 #savedatadict(testdict,outfolder,doplots=True)
 

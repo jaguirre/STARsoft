@@ -83,6 +83,7 @@ def fit_freq_phase(freqs,S21,f00):
     
     popt,pcov = curve_fit(freq_phase_func,freqs,phases,p0=(f00,1e5,0))
     return popt,pcov
+
 #%%
 from astropy.stats import sigma_clip
 import scipy.signal as sig
@@ -134,8 +135,6 @@ def streamcal(resdict):
     # rotate the IQ loop so that the streaming freq point lies on the +I axis
     rot_cor_calS21 = (cor_calI+1j*cor_calQ)*np.exp(-1j*th0)
     phase = np.unwrap(np.angle(rot_cor_calS21))
-    ph0 = phase[ind]
-    if np.abs(ph0) > np.pi: phase = phase-ph0
     
     resdict['fine']['rot cor cal S21'] = rot_cor_calS21
 
@@ -150,9 +149,15 @@ def streamcal(resdict):
         except KeyError: exit # if one of the scan types doesn't exist for this resonator           
     
     # fit the phase vs freq curve to a function
-    popt,pcov = fit_freq_phase(freqs.value,rot_cor_calS21,f00.value)
+    popt,pcov = fit_freq_phase(freqs.value,rot_cor_calS21,f00.value)    
     # the fit values are f0 and Qr in a simplified resonator model
     f0,Qr,th0 = popt 
+    fit_phases = freq_phase_func(freqs.value,*popt)
+    # just for consistency in plotting, make sure we're centered at zero phase
+    ph0 = phase[ind]
+    if np.abs(ph0) > np.pi: 
+        phase -= ph0
+        fit_phases -= ph0 
     
     # calculate what Qc would be in the simplified resonator model
     Qc = Qr*(np.sqrt(xc**2+yc**2)+R)/(2*R)
@@ -163,9 +168,9 @@ def streamcal(resdict):
     resdict['Qc_calc'] = Qc
     
     resdict['freq-phase plot'] = {}
-    resdict['freq-phase plot']['fine data (rot cor cal)'] = [phase,(freqs-f00)/f00]
-    resdict['freq-phase plot']['fine fit to function'] = [freq_phase_func(freqs.value,*popt),(freqs-f00)/f00]
-    resdict['freq-phase plot']['streaming freq']= [ph0,f00]
+    resdict['freq-phase plot']['fine data (rot cor cal)'] = [phase,freqs]
+    resdict['freq-phase plot']['fine fit to function'] = [fit_phases,freqs]
+    resdict['freq-phase plot']['streaming freq']= [phase[ind],f00]
 
     
     # Now convert the streaming data complex phases to frequencies using the fine scan
@@ -294,9 +299,13 @@ def streampsd(resdict,white_freq_range=[30,100]*u.Hz):
     
     f0_fit = resdict['f0_fit'].value
     stream_x_noise = (resdict['stream']['freq noise']-f0_fit)/f0_fit
+    
+    # now adjust to be plotting phase vs x relative to f0_fit
     resdict['freq-phase plot']['x noise'] = [resdict['stream']['stream rot cor phase'],stream_x_noise]
     resdict['freq-phase plot']['streaming freq'] = [resdict['freq-phase plot']['streaming freq'][0],(resdict['freq-phase plot']['streaming freq'][1].value-f0_fit)/f0_fit]
-    
+    resdict['freq-phase plot']['fine data (rot cor cal)'] = [resdict['freq-phase plot']['fine data (rot cor cal)'][0],(resdict['freq-phase plot']['fine data (rot cor cal)'][1].value-f0_fit)/f0_fit]
+    resdict['freq-phase plot']['fine fit to function'] = [resdict['freq-phase plot']['fine fit to function'][0],(resdict['freq-phase plot']['fine fit to function'][1].value-f0_fit)/f0_fit]
+
     # calculate the parallel and perpendicular contributions to the noise
     perp_psd,perp_freqs = psdnoplot(stream_rot_cor_calS21.real,Fs=streamrate,NFFT=2**14,scale_by_freq=True)
     resdict['stream']['perp'] = [perp_freqs*u.Hz,perp_psd*invHz]
