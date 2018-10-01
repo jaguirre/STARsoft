@@ -189,6 +189,10 @@ importmixerfolder(testdict,T_stage,T_BB,cool,datafolder,outfolder,docal=True,doP
 
 savedatadict(testdict,cool,outfolder)
 
+
+
+
+
 #%%
 #resdict = testdict[2][2]
 #plt.figure(-6)
