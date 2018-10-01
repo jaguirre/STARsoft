@@ -85,6 +85,8 @@ def importmixerdata(d,T_stage,T_BB,cool,datafolder='',outfolder='',Pn=0,Fn=0,doc
     if doPSD==True:
         streampsd(d[Pn][Fn])
     if doplots==True:
+        plt.close('all')
+        
         Pn_label = str(Pn).zfill(2)
         Fn_label = str(Fn).zfill(2)
         PnFn = 'Pn'+Pn_label+'Fn'+Fn_label
@@ -94,24 +96,63 @@ def importmixerdata(d,T_stage,T_BB,cool,datafolder='',outfolder='',Pn=0,Fn=0,doc
         fig1name = coolfolder+'freq-phase-plot_'+cool+PnFn+'.png'
         fig1 = plt.figure(fig1name)
         p1 = fig1.add_subplot(111)
-        p1.plot(*resdict['freq-phase plot']['fine data (rot cor cal)'],'o',color='c',label='fine data (rot cor cal)')
-        p1.plot(*resdict['freq-phase plot']['fine fit to function'],'-',color='darkblue',label='fine fit to function')
-        p1.plot(*resdict['freq-phase plot']['x noise'],'.',color='k',label='frequency noise')
+        p1.plot(*resdict['freq-phase plot']['fine data (rot cor cal)'],'o',color='k',label='fine data (rot cor cal)')
+        p1.plot(*resdict['freq-phase plot']['fine fit to function'],'-',linewidth=2,color='r',label='fine fit to function')
+        p1.plot(*resdict['freq-phase plot']['x noise'],'.',color='b',label='frequency noise')
 #                p1.axhline(y=resdict['f0_calc'],linestyle='--',color='g',alpha=0.5,label='f0_calc')
         p1.plot(*resdict['freq-phase plot']['streaming freq'],'*',color='magenta',markersize=9,label='streaming freq')
         p1.legend(loc='lower left',frameon=True)
-        p1.set_xlabel('phase (radians)',fontsize=12)
-        p1.set_ylabel('df/f',fontsize=12)
+        p1.set_xlabel(r'$\delta$f/f',fontsize=12)
+        p1.set_ylabel(r'$\theta$ (radians)',fontsize=12)
         p1.set_title(cool+PnFn)
-        p1.grid(linestyle=':',axis='both',alpha=0.5)
-        p1.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        p1.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
         fig1.savefig(fig1name)
-        plt.close(1)
+        plt.close(fig1name)
         
         # plot resonator line profile fit step
+        fig2name = coolfolder+'mag-S21-plot_'+cool+PnFn+'.png'
+        fig2 = plt.figure(fig2name)
+        p2 = fig2.add_subplot(111)
+        p2.plot(*resdict['mag-S21-plot']['cal fit data'],'o',color='k',label='fine & med cal data')
+        p2.plot(*resdict['mag-S21-plot']['nonlinear func fit'],'-',linewidth=2,color='r',label='nonlinear function fit')
+        p2.legend(loc='lower left',frameon=True)
+        p2.set_xlabel(r'$\delta$f/f',fontsize=12)
+        p2.set_ylabel(r'|$S_{21}$| (dB)',fontsize=12)
+        p2.set_title(cool+PnFn)
+        p2.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+        fig2.savefig(fig2name)
+        plt.close(fig2name)
         
         # plot PSDs and Sxx
-
+        fig3name = coolfolder+'PSD-plot_'+cool+PnFn+'.png'
+        fig3 = plt.figure(fig3name)
+        p3top = fig3.add_subplot(211)
+        p3top.plot(*resdict['stream']['perp'],'-',linewidth=2,color='r',label='Perpendicular')
+        p3top.plot(*resdict['stream']['par'],'-',linewidth=2,color='m',label='Parallel')
+        p3top.set_yscale('log')
+        p3top.set_ylim([1e-9,1e-6])
+        p3top.set_ylabel(r'$\partial S_{21}$ (Hz$^{-1}$)')
+        p3top.set_xscale('log')
+        p3top.legend(loc='upper right',frameon=True,framealpha=1)
+        p3top.tick_params(labelbottom=False)
+        p3top.set_title(cool+PnFn)
+        
+        p3bot = fig3.add_subplot(212,sharex=p3top)
+        p3bot.plot(*resdict['stream']['raw Sxx'],'-',linewidth=2,color='g',label='raw')
+        p3bot.plot(*resdict['stream']['amp sub Sxx'],'-',linewidth=2,color='darkblue',label='amp. sub.')
+        p3bot.plot(resdict['stream']['white_freq_range'],np.ones_like(resdict['stream']['white_freq_range'])*resdict['stream']['raw Sxx white'],'-',linewidth=1.5,color='limegreen',label='raw white')
+        p3bot.plot(resdict['stream']['white_freq_range'],np.ones_like(resdict['stream']['white_freq_range'])*resdict['stream']['amp sub Sxx white'],'-',linewidth=1.5,color='dodgerblue',label='amp. sub. white')
+        p3bot.set_yscale('log')
+        p3bot.set_ylim([1e-18,1e-15])
+        p3bot.set_ylabel(r'$S_{xx}$ (Hz$^{-1}$)')
+        p3bot.set_xscale('log')
+        p3bot.set_xlabel('frequency (Hz)')
+        p3bot.legend(loc='upper right',frameon=True,framealpha=1)
+        
+        fig3.savefig(fig3name)
+        plt.close(fig3name)
+        
+        
     
 def importmixerfolder(d,T_stage,T_BB,cool,datafolder='',outfolder='',docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5):
     atten_list = np.loadtxt(datafolder+'attenuations.txt',delimiter=',')
@@ -125,7 +166,12 @@ def importmixerfolder(d,T_stage,T_BB,cool,datafolder='',outfolder='',docal=True,
 
 import deepdish as dd
 import os
-def savedatadict(testdict,outfolder):
+def savedatadict(testdict,cool,outfolder):
+    if os.path.isdir(outfolder) == False: os.mkdir(outfolder)
+    
+    coolfolder = outfolder+cool+'/'
+    if os.path.isdir(coolfolder) == False: os.mkdir(coolfolder)
+
     dictname = coolfolder+cool+'_datadict.hdf5'
     dd.io.save(dictname,testdict)
     
@@ -141,7 +187,7 @@ outfolder = 'C:/Users/Alyssa/Penn Google Drive/Penn & NSTRF/Caltech Devices/' + 
 #importmixerdata(testdict,T_stage,T_BB,cool,datafolder,outfolder,Pn=1,Fn=1,docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5)
 importmixerfolder(testdict,T_stage,T_BB,cool,datafolder,outfolder,docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5) 
 
-#savedatadict(testdict,outfolder,doplots=True)
+savedatadict(testdict,cool,outfolder)
 
 #%%
 #resdict = testdict[2][2]

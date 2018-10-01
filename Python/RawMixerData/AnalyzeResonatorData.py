@@ -268,11 +268,16 @@ def fit_resonator_S21(resdict):
     boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.inf,-1],[resdict['fine']['freqs'].max().value,1e6,1e8,np.inf,1])
     res_popt,res_pcov = curve_fit(fit_S21_nonlinear,freqs.value,S21tofit,p0=p0t,bounds=boundst)
     
-    resdict['f0_fit'] = res_popt[0]*u.Hz
+    f0_fit = res_popt[0]*u.Hz
+    resdict['f0_fit'] = f0_fit
     resdict['Qr_fit'] = res_popt[1]*u.dimensionless_unscaled
     resdict['Qc_fit'] = res_popt[2]*u.dimensionless_unscaled
     resdict['Chi_fit'] = res_popt[3]*u.dimensionless_unscaled
     resdict['anl_fit'] = res_popt[4]*u.dimensionless_unscaled
+    
+    resdict['mag-S21-plot'] = {}
+    resdict['mag-S21-plot']['nonlinear func fit'] = [(freqs-f0_fit)/f0_fit,20*np.log10(np.abs(S21_nonlinear(freqs.value,*res_popt)))]
+    resdict['mag-S21-plot']['cal fit data'] = [(freqs-f0_fit)/f0_fit,20*np.log10(np.abs(S21))]
 
 #%%    
 def whitenoise(noise_spectrum,white_freq_range):
@@ -301,24 +306,24 @@ def streampsd(resdict,white_freq_range=[30,100]*u.Hz):
     stream_x_noise = (resdict['stream']['freq noise']-f0_fit)/f0_fit
     
     # now adjust to be plotting phase vs x relative to f0_fit
-    resdict['freq-phase plot']['x noise'] = [resdict['stream']['stream rot cor phase'],stream_x_noise]
-    resdict['freq-phase plot']['streaming freq'] = [resdict['freq-phase plot']['streaming freq'][0],(resdict['freq-phase plot']['streaming freq'][1].value-f0_fit)/f0_fit]
-    resdict['freq-phase plot']['fine data (rot cor cal)'] = [resdict['freq-phase plot']['fine data (rot cor cal)'][0],(resdict['freq-phase plot']['fine data (rot cor cal)'][1].value-f0_fit)/f0_fit]
-    resdict['freq-phase plot']['fine fit to function'] = [resdict['freq-phase plot']['fine fit to function'][0],(resdict['freq-phase plot']['fine fit to function'][1].value-f0_fit)/f0_fit]
+    resdict['freq-phase plot']['x noise'] = [stream_x_noise,resdict['stream']['stream rot cor phase']]
+    resdict['freq-phase plot']['streaming freq'] = [(resdict['freq-phase plot']['streaming freq'][1].value-f0_fit)/f0_fit,resdict['freq-phase plot']['streaming freq'][0]]
+    resdict['freq-phase plot']['fine data (rot cor cal)'] = [(resdict['freq-phase plot']['fine data (rot cor cal)'][1].value-f0_fit)/f0_fit,resdict['freq-phase plot']['fine data (rot cor cal)'][0]]
+    resdict['freq-phase plot']['fine fit to function'] = [(resdict['freq-phase plot']['fine fit to function'][1].value-f0_fit)/f0_fit,resdict['freq-phase plot']['fine fit to function'][0]]
 
     # calculate the parallel and perpendicular contributions to the noise
     perp_psd,perp_freqs = psdnoplot(stream_rot_cor_calS21.real,Fs=streamrate,NFFT=2**14,scale_by_freq=True)
-    resdict['stream']['perp'] = [perp_freqs*u.Hz,perp_psd*invHz]
+    resdict['stream']['perp'] = [perp_freqs[1:]*u.Hz,perp_psd[1:]*invHz]
 
     par_psd,par_freqs = psdnoplot(stream_rot_cor_calS21.imag,Fs=streamrate,NFFT=2**14,scale_by_freq=True)
-    resdict['stream']['par'] = [par_freqs*u.Hz,par_psd*invHz]
+    resdict['stream']['par'] = [par_freqs[1:]*u.Hz,par_psd[1:]*invHz]
     
     # approximate the amplifier/electronic noise contribution to the total measured nosie
     rho = (par_psd-perp_psd)/par_psd
     
     # calculate the sxx psd 
     sxx_raw_psd,sxx_freqs = psdnoplot(stream_x_noise,Fs=streamrate,NFFT=2**14,scale_by_freq=True)
-    resdict['stream']['raw Sxx'] = [sxx_freqs*u.Hz,sxx_raw_psd*invHz]
+    resdict['stream']['raw Sxx'] = [sxx_freqs[1:]*u.Hz,sxx_raw_psd[1:]*invHz]
     
     # correct for the amplifier contribution
     resdict['stream']['amp sub Sxx'] = [sxx_freqs[1:]*u.Hz,rho[1:]*sxx_raw_psd[1:]*invHz]
@@ -326,4 +331,5 @@ def streampsd(resdict,white_freq_range=[30,100]*u.Hz):
     # calculate the white noise levels
     resdict['stream']['raw Sxx white'] = whitenoise(resdict['stream']['raw Sxx'],white_freq_range)
     resdict['stream']['amp sub Sxx white'] = whitenoise(resdict['stream']['amp sub Sxx'],white_freq_range)
+    resdict['stream']['white_freq_range'] = np.linspace(white_freq_range.min(),white_freq_range.max(),10)
            
