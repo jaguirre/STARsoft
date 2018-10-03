@@ -266,7 +266,7 @@ def fit_resonator_S21(resdict):
     
     p0t = (f0t,Qrt,Qct,0,0)
 #    boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.inf,-1],[resdict['fine']['freqs'].max().value,1e6,1e8,np.inf,1])
-    boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.pi,-1],[resdict['fine']['freqs'].max().value,1e6,1e8,np.pi,1])
+    boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.pi,-10],[resdict['fine']['freqs'].max().value,1e6,1e8,np.pi,10])
     res_popt,res_pcov = curve_fit(fit_S21_nonlinear,freqs.value,S21tofit,p0=p0t,bounds=boundst)
     
     f0_fit = res_popt[0]*u.Hz
