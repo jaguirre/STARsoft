@@ -143,7 +143,7 @@ cool = 'CD010'
 parentdatafolder = '/scr/starfire/labdata/'
 parentoutfolder = '/scr/starfire/analysis/'
 
-for ind in [3,4,5,6,7]: #for ind in np.arange(0,len(scans_list)):
+for ind in [7]: #for ind in np.arange(0,len(scans_list)):
     testdict = {}
     datafolder = parentdatafolder + dates_list[ind] + '/' + scans_list[ind] + '/'
     datescan = dates_list[ind] + '_' + scans_list[ind]

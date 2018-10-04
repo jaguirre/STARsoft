@@ -74,11 +74,8 @@ def importmixerdata(d,T_stage,T_BB,cool,datafolder='',outfolder='',datescan='',P
 
     ######## Saving data
     # if the folder to save data in doesn't exist, make it
-    if os.path.isdir(outfolder) == False: os.mkdir(outfolder)
     
-#    coolfolder = outfolder+cool+'/'
-#    if os.path.isdir(coolfolder) == False: os.mkdir(coolfolder)
-
+    if os.path.isdir(outfolder) == False: os.mkdir(outfolder)
 
     if docal==True:
         gaincal(d[Pn][Fn],Qignore,poly_order)

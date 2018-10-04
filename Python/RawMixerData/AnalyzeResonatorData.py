@@ -81,7 +81,8 @@ from scipy.optimize import curve_fit
 def fit_freq_phase(freqs,S21,f00):
     phases = np.unwrap(np.angle(S21))
     
-    popt,pcov = curve_fit(freq_phase_func,freqs,phases,p0=(f00,1e5,0))
+#    bounds = ([freqs.min(),1e2,-np.pi],[freqs.max(),1e8,np.pi])
+    popt,pcov = curve_fit(freq_phase_func,freqs,phases,p0=(f00,1e5,0))#,bounds=bounds)
     return popt,pcov
 
 #%%

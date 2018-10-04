@@ -10,34 +10,34 @@ from astropy import units as u
 #%%
 ''' CD011 SHD mixer data '''
 
-Tstage_list = u.mK*[.215,
-                    .215,
-                    .225,
-                    .25,
-                    .275,
-                    .3,
-                    .325,
-                    .35]
 
-TBB_list = len(Tstage_list)*[u.K*0]
+TBB_list = u.K*[5.61,
+                5.75,
+                5.95,
+                6.65,
+                7.1,
+                7.45,
+                7.8]
 
-dates_list = len(Tstage_list)*['20180509']
+Tstage_list = len(TBB_list)*[215*u.mK]
 
-scans_list = ['noise04',
+
+dates_list = len(TBB_list)*['20180607']
+
+scans_list = ['noise01',
+              'noise02',
+              'noise03',
+              'noise04',
               'noise05',
               'noise06',
-              'noise07',
-              'noise08',
-              'noise09',
-              'noise10',
-              'noise11']
+              'noise07']
 
 if (len(TBB_list)==len(Tstage_list)==len(dates_list)==len(scans_list))==False:
     print('Missed something! Input parameters are not the same length.')
 #%%
 from ReadMixerData import *
 
-cool = 'CD011'
+cool = 'CD012'
 parentdatafolder = '/scr/starfire/labdata/'
 parentoutfolder = '/scr/starfire/analysis/'
 
