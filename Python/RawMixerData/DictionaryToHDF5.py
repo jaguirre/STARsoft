@@ -26,10 +26,15 @@ def dict_to_hdf5(mdict,filename):
 def repack(h5file,path,mdict): 
     for key, item in h5file[path].items():
         if isinstance(item, h5py.Dataset):
-            mdict[key] = item.value
+            mdict = item.value
         elif isinstance(item, h5py.Group):
-            mdict[key] = {}
-            mdict[key] = repack(h5file,path+key+'/',mdict[key])
+            try:
+                mdict[int(key)] = {}
+                mdict[int(key)] = repack(h5file,path+key+'/',mdict[int(key)])
+            except ValueError:
+                mdict[key] = {}
+                mdict[key] = repack(h5file,path+key+'/',mdict[key])
+
     return mdict    
 
 def hdf5_to_dict(filename):

@@ -6,6 +6,8 @@ Created on Wed Sep  5 09:54:53 2018
 """
 
 import numpy as np
+import matplotlib as mpl
+mpl.rcParams['grid.linestyle'] = ':'
 import matplotlib.pyplot as plt
 from astropy import units as u
 from AnalyzeResonatorData import *
@@ -111,18 +113,22 @@ def importmixerdata(d,T_stage,T_BB,cool,datafolder='',outfolder='',datescan='',P
         
         # plot resonator line profile fit step
         fig2name = outfolder+'mag-S21-plot_'+cool+'_'+datescan+PnFn+'.png'
-        fig2 = plt.figure(fig2name)
-        p2 = fig2.add_subplot(211)
+        fig2, (p2,p2b) = plt.subplots(2,1,gridspec_kw={'height_ratios':[3, 1]}, sharex=True, num=fig2name)
+#        fig2 = plt.figure(fig2name)
+#        p2 = fig2.add_subplot(211)
         p2.plot(*resdict['mag-S21-plot']['cal fit data'],'o',color='k',label='fine & med cal data')
         p2.plot(*resdict['mag-S21-plot']['nonlinear func fit'],'-',linewidth=2,color='r',label='nonlinear function fit')
         p2.legend(loc='lower left',frameon=True)
-        p2.set_xlabel(r'$\delta$f/f',fontsize=12)
         p2.set_ylabel(r'|$S_{21}$| (dB)',fontsize=12)
         p2.set_title(cool+'_'+datescan+PnFn)
         p2.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
         
-        p2b = fig2.add_subplot(212,sharex=p2)
-        p2b.plot(resdict['mag-S21-plot']['cal fit data'][0],resdict['mag-S21-plot']['cal fit data'][1]-resdict['mag-S21-plot']['nonlinear func fit'][1],'.',color='b')
+#        p2b = fig2.add_subplot(212,sharex=p2)
+        p2b.axhline(y=0,color='k',linestyle=':',alpha=0.5)
+        p2b.plot(resdict['mag-S21-plot']['cal fit data'][0],resdict['mag-S21-plot']['cal fit data'][1]-resdict['mag-S21-plot']['nonlinear func fit'][1],'-',color='darkred')
+        p2b.set_xlabel(r'$\delta$f/f',fontsize=12)
+        p2b.set_ylabel(r'resid(|$S_{21}$|)',fontsize=12)
+        fig2.subplots_adjust(hspace=0)
         fig2.savefig(fig2name)
         plt.close(fig2name)
         
@@ -134,7 +140,7 @@ def importmixerdata(d,T_stage,T_BB,cool,datafolder='',outfolder='',datescan='',P
         p3top.plot(*resdict['stream']['par'],'-',linewidth=2,color='m',label='Parallel')
         p3top.set_yscale('log')
         p3top.set_ylim([1e-9,1e-6])
-        p3top.set_ylabel(r'$\partial S_{21}$ (Hz$^{-1}$)')
+        p3top.set_ylabel(r'$\partial S_{21}$ (Hz$^{-1}$)',fontsize=12)
         p3top.set_xscale('log')
         p3top.legend(loc='upper right',frameon=True,framealpha=1)
         p3top.tick_params(labelbottom=False)
@@ -147,9 +153,9 @@ def importmixerdata(d,T_stage,T_BB,cool,datafolder='',outfolder='',datescan='',P
         p3bot.plot(resdict['stream']['white_freq_range'],np.ones_like(resdict['stream']['white_freq_range'])*resdict['stream']['amp sub Sxx white'],'-',linewidth=1.5,color='dodgerblue',label='amp. sub. white')
         p3bot.set_yscale('log')
         p3bot.set_ylim([1e-18,1e-15])
-        p3bot.set_ylabel(r'$S_{xx}$ (Hz$^{-1}$)')
+        p3bot.set_ylabel(r'$S_{xx}$ (Hz$^{-1}$)',fontsize=12)
         p3bot.set_xscale('log')
-        p3bot.set_xlabel('frequency (Hz)')
+        p3bot.set_xlabel('frequency (Hz)',fontsize=12)
         p3bot.legend(loc='upper right',frameon=True,framealpha=1)
         
         fig3.savefig(fig3name)
@@ -168,7 +174,7 @@ def importmixerfolder(d,T_stage,T_BB,cool,datafolder='',outfolder='',datescan=''
             Fn_label = str(f).zfill(2)
             PnFn = 'Pn'+Pn_label+'Fn'+Fn_label
 
-            if os.path.isfile(datafolder+'fineSweepSet0000'+PnFn+'.txt'): # for cases where the labview aborted in the middle of a run
+            if os.path.isfile(datafolder+'fineSweepSet0000'+PnFn+'.txt') and os.path.isfile(datafolder+'gainSweepSet0000'+PnFn+'.txt') and os.path.isfile(datafolder+'noiseSet0000'+PnFn+'.bin'): # for cases where the labview aborted in the middle of a run
                 importmixerdata(d,T_stage,T_BB,cool,datafolder,outfolder,datescan,p,f,docal,doPSD,doplots)
 
 
