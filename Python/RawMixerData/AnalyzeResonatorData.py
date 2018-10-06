@@ -99,7 +99,7 @@ def deglitch(S21,clip_sigma=5,clip_iters=5):
 #    good_data = ~np.logical_or(I_sc.mask,Q_sc.mask)
 #    S21_deglitched = I_orig[good_data] + 1j*Q_orig[good_data]
 #    
-    S21_deglitched = S21
+    S21_deglitched = S21[10:]
     return S21_deglitched
 
 #%%
@@ -210,7 +210,7 @@ def S21_linear(fr,f0,Qr,Qc):
     S21 = 1-(Qr/Qc)*np.power(1+2*1j*Qr*x,-1)
     return S21
 
-def S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
+def S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl,A):
     y0 = Qr*(fr-f0)/f0
     
     # want to solve: y=y0+a_nl/(1+4*y**2) --> 0 = 1*y**3 - y0*y**2 + .25*y - .25(y0+a_nl)
@@ -227,34 +227,37 @@ def S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
 
     x = yt/Qr 
     
-    S21 = 1-(Qr/Qc)*(1+1j*chi)*np.power(1+2*1j*Qr*x,-1)
+    S21 = A*(1-(Qr/Qc)*(1+1j*chi)*np.power(1+2*1j*Qr*x,-1))
     return S21
 
 
-def I_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
-    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
+def I_nonlinear(fr,f0,Qr,Qc,chi,a_nl,A):
+    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl,A)
     I = S21.real
     return I
 
-def Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
-    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
+def Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl,A):
+    S21 = S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl,A)
     Q = S21.imag
     return Q
 
-def fit_S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl):
-    I = I_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
-    Q = Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl)
+def fit_S21_nonlinear(fr,f0,Qr,Qc,chi,a_nl,A):
+    I = I_nonlinear(fr,f0,Qr,Qc,chi,a_nl,A)
+    Q = Q_nonlinear(fr,f0,Qr,Qc,chi,a_nl,A)
     
     glom = np.concatenate((I,Q))
     return glom
 #%%
 def fit_resonator_S21(resdict):
-    comb_freqs = np.concatenate(((resdict['med']['freqs'].to(u.Hz)).value,(resdict['fine']['freqs'].to(u.Hz)).value))
-    inds = np.argsort(comb_freqs)
-    comb_s21 = np.concatenate((resdict['med']['cal S21'],resdict['fine']['cal S21']))
-    freqs = u.Hz*comb_freqs[inds]
-    S21 = comb_s21[inds]
+#    comb_freqs = np.concatenate(((resdict['med']['freqs'].to(u.Hz)).value,(resdict['fine']['freqs'].to(u.Hz)).value))
+#    inds = np.argsort(comb_freqs)
+#    comb_s21 = np.concatenate((resdict['med']['cal S21'],resdict['fine']['cal S21']))
+#    freqs = u.Hz*comb_freqs[inds]
+#    S21 = comb_s21[inds]
 #    plt.plot(freqs,np.abs(S21),'ko',label='med and fine data')
+    freqs = (resdict['fine']['freqs'].to(u.Hz))
+    S21 = resdict['fine']['cal S21'].value
+    
     Qrt = resdict['Qr_calc']
     Qct = resdict['Qc_calc']
     f0t = resdict['f0_calc']
@@ -265,9 +268,9 @@ def fit_resonator_S21(resdict):
     qt = S21.imag
     S21tofit = np.concatenate((it,qt))
     
-    p0t = (f0t,Qrt,Qct,0,0)
+    p0t = (f0t,Qrt,Qct,0,0,1.0)
 #    boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.inf,-1],[resdict['fine']['freqs'].max().value,1e6,1e8,np.inf,1])
-    boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.pi,-10],[resdict['fine']['freqs'].max().value,1e6,1e8,np.pi,10])
+    boundst = ([resdict['fine']['freqs'].min().value,1e3,1e3,-np.pi,-10,0],[resdict['fine']['freqs'].max().value,1e6,1e8,np.pi,10,10])
     res_popt,res_pcov = curve_fit(fit_S21_nonlinear,freqs.value,S21tofit,p0=p0t,bounds=boundst)
     
     f0_fit = res_popt[0]*u.Hz

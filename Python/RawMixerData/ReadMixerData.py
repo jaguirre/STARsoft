@@ -119,6 +119,8 @@ def importmixerdata(d,T_stage,T_BB,cool,datafolder='',outfolder='',datescan='',P
         p2.set_ylabel(r'|$S_{21}$| (dB)',fontsize=12)
         p2.set_title(cool+'_'+datescan+PnFn)
         p2.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
+        fits = r'$f_0$ = {:.2f}'.format(resdict['f0_fit'].to(u.MHz)) + '\n' + r'$Q_r$ = {:.1e}'.format(resdict['Qr_fit']) + '\n' + r'$Q_c$ = {:.1e}'.format(resdict['Qc_fit']) + '\n' + r'$a_{nl}$ = ' +'{:.2f}'.format(resdict['anl_fit'])
+        p2.text(0.95, 0.01, fits,verticalalignment='bottom',horizontalalignment='right',transform=p2.transAxes,color='k',fontsize=10)
         
 #        p2b = fig2.add_subplot(212,sharex=p2)
         p2b.axhline(y=0,color='k',linestyle=':',alpha=0.5)

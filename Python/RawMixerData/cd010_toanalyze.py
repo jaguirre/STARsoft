@@ -143,7 +143,8 @@ cool = 'CD010'
 parentdatafolder = '/scr/starfire/labdata/'
 parentoutfolder = '/scr/starfire/analysis/'
 
-for ind in [7]: #for ind in np.arange(0,len(scans_list)):
+#for ind in [7]: #
+for ind in np.arange(0,len(scans_list)):
     testdict = {}
     datafolder = parentdatafolder + dates_list[ind] + '/' + scans_list[ind] + '/'
     datescan = dates_list[ind] + '_' + scans_list[ind]
@@ -155,3 +156,67 @@ for ind in [7]: #for ind in np.arange(0,len(scans_list)):
     importmixerfolder(testdict,T_stage,T_BB,cool,datafolder,outfolder,datescan,docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5) 
 
     savedatadict(testdict,cool,datescan,outfolder)
+    
+#%%
+#plt.figure(100)
+#colors = ['maroon','red','darkorange','green','limegreen','b','dodgerblue','m']
+#for ind,scan in enumerate(scans_list):
+#    testdict = hdf5_to_dict('/scr/starfire/analysis/CD010/20180328_'+scan+'/CD010_20180328_'+scan+'_datadict.hdf5')
+#    avals = list(gen_dict_extract('anl_fit',testdict))
+#    pvals = list(gen_dict_extract('LB_atten',testdict))
+#    plt.plot(pvals,avals,'.',color=colors[ind],alpha=0.5)
+#    
+#''' Resonance frequencies of resonators we studied for this device: '''
+#res0 = 324.56*u.MHz
+#res1 = 331.6*u.MHz
+#res2 = 336.84*u.MHz
+#res3 = 342.22*u.MHz
+#res4 = 352.03*u.MHz
+#res5 = 355.61*u.MHz
+#res6 = 361.85*u.MHz
+#res7 = 363.59*u.MHz
+#resonators=[res0,res1,res2,res3,res4,res5,res6,res7]
+#
+
+''' We'll use the range df=f0/Qrange to determine which resonator is which
+    [not the most elegant solution if there are lots of tightly-packed resonators and collisions] '''
+Qrange = 300
+df = [f0/Qrange for f0 in resonators]
+
+
+
+for cool in cdlist:
+    
+    ''' Compare each resonance frequency to the known list of resonators, 
+        use the value to index each scan by resonator number '''
+    for freq in list(gen_dict_extract('f0',cool)):
+        path = dictwhere(cool,'f0',freq)
+        for ind,res in enumerate(resonators):
+            if abs(res-freq) < df[ind]:
+                for sweep,scan in path: # hard-coding in that each freq will be indexed by cd[sweep][scan]
+                    cool[sweep][scan]['res'] = ind    
+    
+    ''' Find the maximum resonance frequency for each resonator within a cooldown,
+        set the maximum to be f00 for that resonator,cooldown '''
+    f00 = np.zeros(len(resonators))*u.MHz
+    for n,r in enumerate(resonators):
+        try: 
+            f0n = max(dictget(cool,dictwhere(cool,'res',n),'f0'))
+            f00[n] = f0n
+            
+        # if a resonator doesn't appear in this cooldown, set its f00 = -1
+        except ValueError: 
+            f00[n] = -1*u.MHz
+    cool['f00'] = f00
+    
+    ''' Use the f00 values for each resonator,cooldown to calculate x = (f-f00)/f
+        for each scan in the cooldown '''
+    for freq in list(gen_dict_extract('f0',cool)):
+        path2 = dictwhere(cool,'f0',freq)
+        reso = dictget(cool,path2,'res')
+        x = ((freq-f00[reso])/f00[reso]).to(u.dimensionless_unscaled)
+        for sweep2,scan2 in path2: # hard-coding in that each freq will be indexed by cd[sweep][scan]
+            cool[sweep2][scan2]['x'] = x
+            
+    del path,path2        
+
