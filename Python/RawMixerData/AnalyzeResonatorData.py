@@ -89,7 +89,6 @@ def fit_freq_phase(freqs,S21,f00):
 from astropy.stats import sigma_clip
 import scipy.signal as sig
 def deglitch(S21,clip_sigma=5,clip_iters=5):
-    ''' Not doing anything right now!!! '''
 #    I_orig = S21.real
 #    Q_orig = S21.imag
 #    
@@ -99,6 +98,7 @@ def deglitch(S21,clip_sigma=5,clip_iters=5):
 #    good_data = ~np.logical_or(I_sc.mask,Q_sc.mask)
 #    S21_deglitched = I_orig[good_data] + 1j*Q_orig[good_data]
 #    
+    ''' just cropping to fix some glitches in the first few points '''
     S21_deglitched = S21[10:]
     return S21_deglitched
 
@@ -325,6 +325,8 @@ def streampsd(resdict,white_freq_range=[30,100]*u.Hz):
     
     # approximate the amplifier/electronic noise contribution to the total measured nosie
     rho = (par_psd-perp_psd)/par_psd
+    for ind in np.where(rho < 0)[0]:
+        rho[ind] = 1
     
     # calculate the sxx psd 
     sxx_raw_psd,sxx_freqs = psdnoplot(stream_x_noise,Fs=streamrate,NFFT=2**14,scale_by_freq=True)

@@ -157,26 +157,76 @@ for ind in np.arange(0,len(scans_list)):
 
     savedatadict(testdict,cool,datescan,outfolder)
     
+    
+#%%
 #%%
 #plt.figure(100)
-#colors = ['maroon','red','darkorange','green','limegreen','b','dodgerblue','m']
-#for ind,scan in enumerate(scans_list):
-#    testdict = hdf5_to_dict('/scr/starfire/analysis/CD010/20180328_'+scan+'/CD010_20180328_'+scan+'_datadict.hdf5')
+colors = ['maroon','red','darkorange','green','limegreen','b','dodgerblue','m']
+
+res1 = 0.33163*u.GHz
+res2 = 0.34217*u.GHz
+res3 = 0.35553*u.GHz
+res4 = 0.36178*u.GHz
+resonators = [res1,res2,res3,res4]
+
+Qrange = 300
+df = [f0/Qrange for f0 in resonators]
+
+for res,resfreq in enumerate(resonators):
+    
+    res=0
+    resfreq=resonators[res]
+    fig,(p1,p2,p3) = plt.subplots(3,1,sharex=True,num=(str(res)+' LB'))
+    fig2,(px,psxx) = plt.subplots(2,1,sharex=True,num=(str(res)+' TBB'))
+    
+    for ind,scan in enumerate(scans_list[:-1]):
+    #ind=0
+    #scan=scans_list[ind]
+        testdict = hdf5_to_dict('/scr/starfire/analysis/CD010/20180328_'+scan+'/CD010_20180328_'+scan+'_datadict.hdf5')
+        
+        # Label each dataset by resonator
+        for pn in testdict.keys():
+            try:
+                for fn in testdict[pn].keys():
+    #                print(str(pn)+', '+str(fn))
+                    for indx,reso in enumerate(resonators):
+                        if abs(reso-testdict[pn][fn]['initial f0']*u.Hz) < df[indx]:
+                            testdict[pn][fn]['res'] = indx
+    
+            except AttributeError: exit
+        
+        ### want: P_LB vs a_nl,Qr,Qc,Qi,
+        # separate out by resonator
+    #    for res,resfreq in enumerate(resonators):
+        paths = dictwhere(testdict,'res',res)
+        streampaths = [[paths[k][0],paths[k][1],'stream'] for k in np.arange(len(paths))]
+#        try:
+        p1.plot(dictget(testdict,paths,'LB_atten'),dictget(testdict,paths,'anl_fit'),'o',color=colors[ind],alpha=0.4)
+        p2.plot(dictget(testdict,paths,'LB_atten'),dictget(testdict,paths,'f0_fit'),'o',color=colors[ind],alpha=0.4)
+        p3.plot(dictget(testdict,paths,'LB_atten'),dictget(testdict,paths,'Qr_fit'),'s',color=colors[ind],alpha=0.4)
+        p3.plot(dictget(testdict,paths,'LB_atten'),dictget(testdict,streampaths,'Qc_fit'),'v',color=colors[ind],alpha=0.4)
+        
+        px.plot(dictget(testdict,paths,'T_BB'),dictget(testdict,paths,'f0_fit'),'ko',alpha=0.4)
+        psxx.plot(dictget(testdict,paths,'T_BB'),dictget(testdict,streampaths,'amp sub Sxx white'),'ko',alpha=0.4)
+    p1.set_xlim([25,45])
+    p1.set_ylim([-1,.25])
 #    avals = list(gen_dict_extract('anl_fit',testdict))
 #    pvals = list(gen_dict_extract('LB_atten',testdict))
 #    plt.plot(pvals,avals,'.',color=colors[ind],alpha=0.5)
-#    
-#''' Resonance frequencies of resonators we studied for this device: '''
-#res0 = 324.56*u.MHz
-#res1 = 331.6*u.MHz
-#res2 = 336.84*u.MHz
-#res3 = 342.22*u.MHz
-#res4 = 352.03*u.MHz
-#res5 = 355.61*u.MHz
-#res6 = 361.85*u.MHz
-#res7 = 363.59*u.MHz
-#resonators=[res0,res1,res2,res3,res4,res5,res6,res7]
-#
+    
+#%%    
+    
+''' Resonance frequencies of resonators we studied for this device: '''
+res0 = 324.56*u.MHz
+res1 = 331.6*u.MHz
+res2 = 336.84*u.MHz
+res3 = 342.22*u.MHz
+res4 = 352.03*u.MHz
+res5 = 355.61*u.MHz
+res6 = 361.85*u.MHz
+res7 = 363.59*u.MHz
+resonators=[res0,res1,res2,res3,res4,res5,res6,res7]
+
 
 ''' We'll use the range df=f0/Qrange to determine which resonator is which
     [not the most elegant solution if there are lots of tightly-packed resonators and collisions] '''
