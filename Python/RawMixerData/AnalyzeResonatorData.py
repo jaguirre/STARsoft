@@ -99,7 +99,7 @@ def deglitch(S21,clip_sigma=5,clip_iters=5):
 #    S21_deglitched = I_orig[good_data] + 1j*Q_orig[good_data]
 #    
     ''' just cropping to fix some glitches in the first few points '''
-    S21_deglitched = S21[10:]
+    S21_deglitched = S21[25:]
     return S21_deglitched
 
 #%%

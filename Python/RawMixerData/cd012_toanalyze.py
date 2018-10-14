@@ -32,6 +32,16 @@ scans_list = ['noise01',
               'noise06',
               'noise07']
 
+res1 = 0.33163*u.GHz
+res2 = 0.34217*u.GHz
+res3 = 0.35553*u.GHz
+res4 = 0.36178*u.GHz
+resonators = [res1,res2,res3,res4]
+
+Qrange = 300
+df = [f0/Qrange for f0 in resonators]
+
+
 if (len(TBB_list)==len(Tstage_list)==len(dates_list)==len(scans_list))==False:
     print('Missed something! Input parameters are not the same length.')
 #%%
@@ -55,5 +65,16 @@ for ind in np.arange(0,len(scans_list)):
     #importmixerdata(testdict,T_stage,T_BB,cool,datafolder,outfolder,Pn=1,Fn=1,docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5)
     
     importmixerfolder(testdict,T_stage,T_BB,cool,datafolder,outfolder,datescan,docal=True,doPSD=True,doplots=True,Qignore=10**3,poly_order=5) 
+
+    # label the resonators
+    for pn in testdict.keys():
+        try:
+            for fn in testdict[pn].keys():
+                for indx,reso in enumerate(resonators):
+                    if abs(reso-testdict[pn][fn]['initial f0']*u.Hz) < df[indx]:
+                        testdict[pn][fn]['res'] = indx
+
+        except AttributeError: exit
+
 
     savedatadict(testdict,cool,datescan,outfolder)
