@@ -84,13 +84,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import KID_model_functions as kids
 import fitting_KID_model_functions as fitkids
+from DictionaryToHDF5 import *
+from dictionary_functions import *
 from scipy.optimize import curve_fit
 from astropy import units as u
 
 
 #test case:
 alpha = 0.73*u.dimensionless_unscaled
-f = 245*u.MHz
+#f = 245*u.MHz
 Tstage = 0.215*u.K
 Tstage = np.linspace(0.2,0.4,15)*u.K
 Tc = 1.39*u.K
@@ -112,8 +114,10 @@ for indx,res in enumerate(resonators):
     res=resonators[indx]
     Tstagelist = []
     f0list = []
-    Qrlist = []
+    Qrinvlist = []
     Sxxlist = []
+    alist = []
+    LBlist = []
 
     for ind in np.arange(0,n):
         scan = scans_list[ind]
@@ -122,27 +126,73 @@ for indx,res in enumerate(resonators):
         allpaths = dictwhere(testdict,'res',indx)    
         a = dictget(testdict,allpaths,'LB_atten')
         
-        paths = [allpaths[pa] for pa in np.where(a==np.min(a))[0]]
+        paths = [allpaths[pa] for pa in np.where(a==np.max(a))[0]]
         streampaths = [[paths[k][0],paths[k][1],'stream'] for k in np.arange(len(paths))]
         
         try:
-            Tstage = dictget(testdict,paths,'T_stage')
-            for T in Tstage: Tstagelist.append(T)
+            T_stage = dictget(testdict,paths,'T_stage')
+            for T in T_stage: Tstagelist.append(T)
             
             f0 = dictget(testdict,paths,'f0_fit')
             for f in f0: f0list.append(f)
             
             Qr = dictget(testdict,paths,'Qr_fit')
-            for Q in Qr: Qrlist.append(Q)
+            for Q in Qr: Qrinvlist.append(1./Q)
             
             Sxx = dictget(testdict,streampaths,'amp sub Sxx white')
             for S in Sxx: Sxxlist.append(S)
+            
+            a1 = dictget(testdict,paths,'anl_fit')
+            for anl in a1: alist.append(anl)
+            
+            plb = dictget(testdict,paths,'LB_atten')
+            for polb in plb: LBlist.append(polb)
+
+
         except KeyError: exit
         
+    xlist = ((f0list-np.max(f0list))/np.max(f0list))
+    Qrinvlist = np.array(Qrinvlist)
+    Tstagelist = u.K*np.array(Tstagelist)
+    xtest = kids.xMB(alpha,u.Hz*f0list[0],Tstagelist,Tc,TBB,V,n_star,tau_max,eta_pb,eta_opt,trans=0,N0=N0)    
+    Qinvtest = kids.QinvMB(alpha,u.Hz*f0list[0],Tstagelist,Tc,6*u.K,V,n_star,tau_max,eta_pb,eta_opt=1,trans=0,N0=N0)
+    data = [Tstagelist,f0list[0]*u.Hz]
+    xsig = 0.05*xlist[0]*np.ones_like(xlist)
+    if xlist[0]==0: xsig = 0.05*xlist[1]*np.ones_like(xlist)
+    Qsig = 0.05*Qrinvlist
     
-    fig,(p1,p2,p3) = plt.subplots(3,1,sharex=True,num=('Res '+str(indx)))
-    p1.plot(Tstagelist,f0list,'.')
-    p2.plot(Tstagelist,Qrlist,'.')
-    p3.plot(Tstagelist,Sxxlist,'.')
+    xfitopt,xfitcov = curve_fit(fitkids.x_dark_fit,data,xlist,p0=(.73,1.39,(xtest[0]/(f0list[0]))),sigma=xsig)#,bounds=([0,.5,-1],[1,2.5,0]))
+    Qfitopt,Qfitcov = curve_fit(fitkids.Qinv_dark_fit,data,Qrinvlist,p0=(.73,1.39,Qinvtest[0]),sigma=Qsig,bounds=([0,.5,0],[1,2.5,max(Qrinvlist)]))
+    
+    cdata = np.concatenate((xlist,Qrinvlist))
+    csigma = np.concatenate((xsig,Qsig))
+    p0=(.73,1.39,xfitopt[-1],Qfitopt[-1])#(xtest[0]/f0list[0]),Qinvtest[0])
+    cfitopt,cfitcov = curve_fit(fitkids.x_Qinv_dark_simulfit,data,cdata,sigma=csigma,p0=(.51,1.32,4.1e-14,8.9e-6),bounds=([0,.5,-1,0],[1,2.5,1,max(Qrinvlist)]))
+    print(str(res)+': ')
+    print(xfitopt)
+    print(Qfitopt)
+    print(cfitopt)
+
+    fig,(p1,p2,p3,p4) = plt.subplots(4,1,sharex=True,num=('Res '+str(indx)))
+    fig.suptitle('Res '+str(indx))
+    p1.plot(Tstagelist,xlist,'ko')
+    p1.plot(Tstagelist,xtest,'g--')
+    p1.plot(Tstagelist,fitkids.x_dark_fit(data,*xfitopt),'cx')
+    p1.plot(Tstagelist,fitkids.x_Qinv_dark_simulfit(data,*cfitopt)[0:len(Tstagelist)],'r-')
+    p1.set_ylabel(r'$\delta$ f/f')
+    p2.plot(Tstagelist,Qrinvlist,'ko')
+    p2.plot(Tstagelist,Qinvtest,'g--')
+    p2.plot(Tstagelist,fitkids.Qinv_dark_fit(data,*Qfitopt),'cx')
+    p2.plot(Tstagelist,fitkids.x_Qinv_dark_simulfit(data,*cfitopt)[len(Tstagelist):],'r-')
+    p2.set_ylabel(r'1/$Q_r$')
+    p2.set_title(r'Simul fit: $\alpha$ = {:.2f}'.format(cfitopt[0])+r', $T_c$ = {:.2f}'.format(cfitopt[1]))
+    p3.plot(Tstagelist,Sxxlist,'ko')
+    p3.set_ylabel(r'$S_{xx}$ (Hz$^{-1}$)')
+    p4.set_xlabel(r'$T_{stage}$ (K)')
+    p4.plot(Tstagelist,alist,'ko')
+    p4.set_ylabel(r'$a_{nl}$ fit')
+    p4b = p4.twinx()
+    p4b.plot(Tstagelist,LBlist,'gs')
+    p4b.set_ylabel(r'LB atten (dB)')
     
     
