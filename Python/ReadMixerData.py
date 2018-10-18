@@ -30,7 +30,8 @@ def importmixerdata(d,T_stage,T_BB,cool,datafolder='',outfolder='',datescan='',P
     d[Pn][Fn]['LB_atten'] = u.dB*atten_list[Pn]
     
     freq_list = np.loadtxt(datafolder+'initial_f0.txt',delimiter=',')
-    d[Pn][Fn]['initial f0'] = freq_list[Fn]
+    try: d[Pn][Fn]['initial f0'] = freq_list[Fn]
+    except IndexError: d[Pn][Fn]['initial f0'] = freq_list
     
     d[Pn][Fn]['T_BB'] = T_BB
     d[Pn][Fn]['T_stage'] = T_stage
@@ -168,14 +169,23 @@ def importmixerfolder(d,T_stage,T_BB,cool,datafolder='',outfolder='',datescan=''
     
 
     for p in np.arange(0,len(atten_list)):
-        for f in np.arange(0,len(freq_list)):
+        try:
+            for f in np.arange(0,len(freq_list)):
+                Pn_label = str(p).zfill(2)
+                Fn_label = str(f).zfill(2)
+                PnFn = 'Pn'+Pn_label+'Fn'+Fn_label
+    
+                if os.path.isfile(datafolder+'fineSweepSet0000'+PnFn+'.txt') and os.path.isfile(datafolder+'gainSweepSet0000'+PnFn+'.txt') and os.path.isfile(datafolder+'noiseSet0000'+PnFn+'.bin'): # for cases where the labview aborted in the middle of a run
+                    importmixerdata(d,T_stage,T_BB,cool,datafolder,outfolder,datescan,p,f,docal,doPSD,doplots)
+
+        except TypeError: #if there's only one frequency in the scan
+            f = 0
             Pn_label = str(p).zfill(2)
             Fn_label = str(f).zfill(2)
             PnFn = 'Pn'+Pn_label+'Fn'+Fn_label
 
             if os.path.isfile(datafolder+'fineSweepSet0000'+PnFn+'.txt') and os.path.isfile(datafolder+'gainSweepSet0000'+PnFn+'.txt') and os.path.isfile(datafolder+'noiseSet0000'+PnFn+'.bin'): # for cases where the labview aborted in the middle of a run
                 importmixerdata(d,T_stage,T_BB,cool,datafolder,outfolder,datescan,p,f,docal,doPSD,doplots)
-
 
 #import deepdish as dd
 from DictionaryToHDF5 import *

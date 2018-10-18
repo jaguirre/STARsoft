@@ -7,132 +7,26 @@ Created on Mon Oct  1 08:43:24 2018
 
 from astropy import units as u
 
-#cd010_dates = ['20180305',
-#               '20180305',
-#               '20180305',
-#               '20180306',
-#               '20180307',
-#               '20180307',
-#               '20180307',
-#               '20180307',
-#               '20180307',
-#               '20180307',
-#               '20180307',
-#               '20180309',
-#               '20180309',
-#               '20180309',
-#               '20180309',
-#               '20180309',
-#               '20180309',
-#               '20180312',
-#               '20180312',
-#               '20180312',
-#               '20180312',
-#               '20180312',
-#               '20180312']
-#
-#cd010_scans = ['noise13',
-#               'noise15',
-#               'noise17',
-#               'noise0',
-#               'noise0',
-#               'noise01',
-#               'noise02',
-#               'noise03',
-#               'noise04',
-#               'noise05',
-#               'noise06',
-#               'noise0',
-#               'noise03',
-#               'noise04',
-#               'noise05',
-#               'noise06',
-#               'noise07',
-#               'noise0',
-#               'noise02',
-#               'noise04',
-#               'noise06',
-#               'noise10',
-#               'noise12']
-#
-#cd010_Tstage = u.mK*[210,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,
-#                215,]
-#
-#
-#cd010_TBB = u.K*[6.4,
-#             6.75,
-#             7.1,
-#             6.75,
-#             7.1,
-#             7.6,
-#             8.1,
-#             8.7,
-#             9.3,
-#             10.2,
-#             11.1,
-#             6.4,
-#             6.4,
-#             6.4,
-#             6.4,
-#             6.4,
-#             6.4,
-#             6.5,
-#             6.75,
-#             7.1,
-#             7.6,
-#             8.7,
-#             9.3]
-#%%
-''' CD010 SHD mixer data '''
-TBB_list = u.K*[6.65,
-                7.1,
-                7.45,
-                7.8,
-                8.45,
-                9.0,
-                9.85,
-                10.6]
+''' CD013 mixer data '''
+TBB_list = u.K*[5.65,
+                5.65,
+                9,
+                10,
+                11]
 
 Tstage_list = u.mK*[.215,
                     .215,
                     .215,
                     .215,
-                    .215,
-                    .215,
-                    .215,
                     .215]
 
-dates_list = len(TBB_list)*['20180328']
+dates_list = len(TBB_list)*['20180702']
 
-scans_list = ['noise01',
-              'noise02',
-              'noise03',
-              'noise04',
-              'noise05',
-              'noise06',
-              'noise07']
-              #'noise09']
+scans_list = ['noise06',
+              'noise07',
+              'noise10',
+              'noise12',
+              'noise14']
 
 res1 = 0.33163*u.GHz
 res2 = 0.34217*u.GHz
@@ -150,7 +44,7 @@ if (len(TBB_list)==len(Tstage_list)==len(dates_list)==len(scans_list))==False:
 #%%
 #from ReadMixerData import *
 #
-#cool = 'CD010'
+#cool = 'CD013'
 #parentdatafolder = '/scr/starfire/labdata/'
 #parentoutfolder = '/scr/starfire/analysis/'
 #
@@ -178,9 +72,8 @@ if (len(TBB_list)==len(Tstage_list)==len(dates_list)==len(scans_list))==False:
 #
 #
 #    savedatadict(testdict,cool,datescan,outfolder)
+#    
     
-    
-#%%
 #%%
 import matplotlib.pyplot as plt
 import numpy as np
@@ -212,39 +105,40 @@ Tstage0 = 0.215*u.K
 
 n = len(scans_list)
 
-for indx,res in enumerate(resonators):
-    res=resonators[indx]
-    TBBlist = []
-    f0list = []
-    Qrinvlist = []
-    Sxxlist = []
+#for indx,res in enumerate(resonators):
+indx=0
+res=resonators[indx]
+TBBlist = []
+f0list = []
+Qrinvlist = []
+Sxxlist = []
 
-    for ind in np.arange(0,n):
-        scan = scans_list[ind]
-        testdict = hdf5_to_dict('/scr/starfire/analysis/CD010/20180328_'+scan+'/CD010_20180328_'+scan+'_datadict.hdf5')
+for ind in np.arange(0,n):
+    scan = scans_list[ind]
+    testdict = hdf5_to_dict('/scr/starfire/analysis/CD013/20180702_'+scan+'/CD013_20180702_'+scan+'_datadict.hdf5')
 
-        allpaths = dictwhere(testdict,'res',indx)    
-        a = dictget(testdict,allpaths,'LB_atten')
-        
-        paths = [allpaths[pa] for pa in np.where(a==np.min(a))[0]]
-        streampaths = [[paths[k][0],paths[k][1],'stream'] for k in np.arange(len(paths))]
-        
-        try:
-            T_BB = dictget(testdict,paths,'T_BB')
-            for T in T_BB: TBBlist.append(T)
-            
-            f0 = dictget(testdict,paths,'f0_fit')
-            for fi in f0: f0list.append(fi)
-            
-            Qr = dictget(testdict,paths,'Qr_fit')
-            for Q in Qr: Qrinvlist.append(1./Q)
-            
-            Sxx = dictget(testdict,streampaths,'amp sub Sxx white')
-            for S in Sxx: Sxxlist.append(S)
-        except KeyError: exit
+    allpaths = dictwhere(testdict,'res',indx)    
+    a = dictget(testdict,allpaths,'LB_atten')
     
-    f = f0list[0]*u.Hz    
-    xlist = (f0list-np.max(f0list))/np.max(f0list)
+    paths = [allpaths[pa] for pa in np.where(a==np.min(a))[0]]
+    streampaths = [[paths[k][0],paths[k][1],'stream'] for k in np.arange(len(paths))]
+    
+    try:
+        T_BB = dictget(testdict,paths,'T_BB')
+        for T in T_BB: TBBlist.append(T)
+        
+        f0 = dictget(testdict,paths,'f0_fit')
+        for fi in f0: f0list.append(fi)
+        
+        Qr = dictget(testdict,paths,'Qr_fit')
+        for Q in Qr: Qrinvlist.append(1./Q)
+        
+        Sxx = dictget(testdict,streampaths,'amp sub Sxx white')
+        for S in Sxx: Sxxlist.append(S)
+    except KeyError: exit
+
+f = f0list[0]*u.Hz    
+xlist = (f0list-np.max(f0list))/np.max(f0list)
 #    Sxxlist = np.array(Sxxlist)
 #    x2test = kids.xMB(alpha,f,Tstage0,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt=.17,trans=trans,N0=N0)
 #    sxx2test = kids.Sxx(alpha,f,Tstage0,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,eta_opt=0.17,trans=trans,N0=N0)
@@ -269,11 +163,11 @@ for indx,res in enumerate(resonators):
 #    opt_fitopt,opt_fitcov = curve_fit(fitkids.x_Sxx_opt_simulfit,data2,opt_data,sigma=opt_sigma,p0=opt_p0,bounds=opt_bounds)
 #    
 #    fig,(p1,p2,p3) = plt.subplots(3,1,sharex=True,num=('Res '+str(indx)))
-    fig = plt.figure('Res ' + str(indx))
-    p1 = fig.add_subplot(111)
-    p1.plot(TBB_to_Pinc(TBBlist,trans=1),xlist,'r.')
-    p1.set_xlabel(r'$P_{inc}$')
-    p1.set_ylabel('df/f')
+fig = plt.figure('Res ' + str(indx))
+p1 = fig.add_subplot(111)
+p1.plot(TBB_to_Pinc(TBBlist,trans=1),xlist,'r.')
+p1.set_xlabel(r'$P_{inc}$')
+p1.set_ylabel('df/f')
 #    p1.plot(Tstagelist,xtest,'g--')
 #    p1.plot(Tstagelist,fitkids.x_dark_fit(data,*xfitopt),'cx')
 #    p1.plot(Tstagelist,fitkids.x_Qinv_dark_simulfit(data,*cfitopt)[0:len(Tstagelist)],'r-')
@@ -285,7 +179,7 @@ for indx,res in enumerate(resonators):
 #    
 #
 
-    np.savetxt('/scr/starfire/analysis/CD010/CD010_reduced_'+'Res'+str(indx)+'.csv',np.transpose(np.array((TBBlist,f0list,xlist,Sxxlist))),delimiter=',')
+np.savetxt('/scr/starfire/analysis/CD013/CD013_reduced_'+'Res'+str(indx)+'.csv',np.transpose(np.array((TBBlist,f0list,xlist,Sxxlist))),delimiter=',')
 
 #%%
 #plt.figure(100)

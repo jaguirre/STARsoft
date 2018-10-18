@@ -168,8 +168,8 @@ for indx,res in enumerate(resonators):
 #    fig,(p1,p2,p3) = plt.subplots(3,1,sharex=True,num=('Res '+str(indx)))
     fig = plt.figure('Res ' + str(indx))
     p1 = fig.add_subplot(111)
-    p1.plot(TBB_to_Pinc(TBBlist),xlist,'k.')
-    p1.set_xlabel(r'$T_{BB}$')
+    p1.plot(TBB_to_Pinc(TBBlist,trans=0.03),xlist,'k.')
+    p1.set_xlabel(r'$P_{inc}$')
     p1.set_ylabel('df/f')
 #    p1.plot(Tstagelist,xtest,'g--')
 #    p1.plot(Tstagelist,fitkids.x_dark_fit(data,*xfitopt),'cx')
@@ -181,3 +181,5 @@ for indx,res in enumerate(resonators):
 #    p3.plot(Tstagelist,Sxxlist,'ko')
 #    
 #
+
+    np.savetxt('/scr/starfire/analysis/CD012/CD012_reduced_'+'Res'+str(indx)+'.csv',np.transpose(np.array((TBBlist,f0list,xlist,Sxxlist))),delimiter=',')
