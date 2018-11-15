@@ -8,7 +8,10 @@ Created on Fri Aug  3 22:18:24 2018
 import numpy as np
 from astropy import units as u
 from astropy import constants as c
-
+import os
+# This determines the actual location of the module file, so we can specify paths relative to it
+path = os.path.abspath(__file__)
+module_path = os.path.dirname(path)+os.sep
 
 # The accepted literature value for the density of states in thin film Al. 
 # It's set as default for all these functions so changing it here should change it everywhere.
@@ -53,7 +56,7 @@ def ngamma(nu_opt,T_BB):
     return n_gamma
 
 #%%
-filt_k,filt_t = np.loadtxt('BandpassFilter.txt',skiprows=1,delimiter=',',unpack=True) # annoying, but gotta keep BandpassFilter.txt accessible
+filt_k,filt_t = np.loadtxt(module_path+'BandpassFilter.txt',skiprows=1,delimiter=',',unpack=True) # annoying, but gotta keep BandpassFilter.txt accessible
 indx = np.argsort(filt_k) # sort the filter transmission spectrum by wavenumber
 freq_filt = (filt_k[indx]*u.k).to(u.THz,equivalencies=u.spectral()) # apply the sort to the wavenumber points, convert from k=icm to THz
 trans_filt = filt_t[indx] # apply the sort to the transmission points
