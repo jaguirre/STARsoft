@@ -80,19 +80,29 @@ Pinc2LTDi,x2LTD,x2sig = np.loadtxt('comb_evap_x_vs_Pinc.txt',unpack=True)
 Pinc2LTDi*=u.pW
 x2LTD*=u.dimensionless_unscaled
 indx2 = np.argsort(Pinc2LTDi)
-indx22 = np.arange(0,8)
-Pinc2LTD = (Pinc2LTDi[indx2])[indx22]
-x2LTD = (x2LTD[indx2])[indx22]
-x2sig = (x2sig[indx2])[indx22]
+Pinc2LTD = Pinc2LTDi[indx2]
+x2LTD = (x2LTD[indx2])
+x2sig = (x2sig[indx2])
 
+#indx2 = np.argsort(Pinc2LTDi)
+#indx22 = np.arange(0,8)
+#Pinc2LTD = (Pinc2LTDi[indx2])[indx22]
+#x2LTD = (x2LTD[indx2])[indx22]
+#x2sig = (x2sig[indx2])[indx22]
+#
 PincLTDi,SxxLTD,Sxxsig = np.loadtxt('comb_evap_Sxx_vs_Pinc.txt',unpack=True)
 PincLTDi*=u.pW
 SxxLTD*=np.power(u.Hz,-1)
 indx = np.argsort(PincLTDi)
-indx1 = np.arange(0,9)
-PincLTD = (PincLTDi[indx])[indx1]
-SxxLTD = (SxxLTD[indx])[indx1]
-Sxxsig = (Sxxsig[indx])[indx1]
+PincLTD = PincLTDi[indx]
+SxxLTD = (SxxLTD[indx])
+Sxxsig = (Sxxsig[indx])
+
+#indx = np.argsort(PincLTDi)
+#indx1 = np.arange(0,9)
+#PincLTD = (PincLTDi[indx])[indx1]
+#SxxLTD = (SxxLTD[indx])[indx1]
+#Sxxsig = (Sxxsig[indx])[indx1]
 
 Tstage0 = .215*u.K
 f = 330*u.MHz
@@ -124,8 +134,8 @@ boundsx = ([0,0,0,-1],[np.inf,1e5,1,1])
 #x2sig = 0.05*x2_interp[1]*np.ones_like(x2_interp)
 
 sxxdata = [sxxTBB,alpha,f,Tstage0,Tc,V,eta_pb*u.dimensionless_unscaled,nu_opt,trans,N0]
-p0Sxx = (n_star.value,tau_max.value,eta_opt,(Sxx_interp[0]/2).value)
-boundsSxx = ([0,0,0,0],[np.inf,1e5,1,(Sxx_interp[0]).value])
+p0Sxx = (100,tau_max.value,eta_opt,0.99*Sxx_interp[0].value)
+boundsSxx = ([10,0,0,0.5*Sxx_interp[0].value],[1000,1e5,1,(Sxx_interp[0]).value])
 #Sxxsig = 0.05*Sxx_interp
 
 x2fitopt,x2fitcov = curve_fit(fitkids.x_opt_fit,xdata,x2_interp,sigma=x2sig,p0=p0x,bounds=boundsx)
@@ -134,8 +144,8 @@ Sxxfitopt,Sxxfitcov = curve_fit(fitkids.Sxx_fit,sxxdata,Sxx_interp,sigma=Sxxsig,
 opt_data = np.concatenate((x2_interp,Sxx_interp))
 opt_sigma = np.concatenate((x2sig,Sxxsig))
 #opt_p0 =(n_star.value,tau_max.value,eta_opt,(x2test[1]/f).value,(Sxx_interp[0]/2).value)
-opt_p0 =(Sxxfitopt[0],Sxxfitopt[1],eta_opt,(x2test[1]/f).value,(Sxx_interp[0]/2).value)
-opt_bounds = ([0,0,0,-1,0],[np.inf,1e5,1,1,(Sxx_interp[0]).value])
+opt_p0 =(Sxxfitopt[0],Sxxfitopt[1],0.8,(x2test[1]/f).value,Sxx_interp[0].value)
+opt_bounds = ([10,0,0,-1,0.5*Sxx_interp[0].value],[1000,1e5,1,1,(Sxx_interp[0]).value])
 #opt_bounds = ([0,0,0,(min(x2_interp)/f).value,0],[np.inf,1e5,1,-(min(x2_interp)/f).value,(Sxx_interp[0]).value])
 opt_fitopt,opt_fitcov = curve_fit(fitkids.x_Sxx_opt_simulfit,[xdata,sxxdata],opt_data,sigma=opt_sigma,p0=opt_p0,bounds=opt_bounds)
 
@@ -162,6 +172,62 @@ p4.plot(kids.TBB_to_Pinc(sxxTBB),fitkids.x_Sxx_opt_simulfit([xdata,sxxdata],*opt
 #p4.plot(kids.TBB_to_Pinc(sxxTBB),fitkids.Sxx_fit(sxxdata,Sxxfitopt[0],Sxxfitopt[1],.6,Sxxfitopt[-1]),'g:')
 p4.set_xlabel(r'$P_{inc}$ (pW)')
 p4.set_ylabel(r'$S_{xx}$ (Hz$^{-1}$)')
-p4.legend(loc='lower right')
+
+n_star = opt_fitopt[0]
+tau_max = opt_fitopt[1]
+eta_opt = opt_fitopt[2]
+Sxx0 = opt_fitopt[4]
+
+#Sxxtot = Sxx(alpha,f,Tstage,Tc,TBB_demo,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)+Sxx0
+SxxGphoton = Sxx_G_photon(alpha,f,Tstage,Tc,TBB_demo,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)
+SxxRphoton = Sxx_R_photon(alpha,f,Tstage,Tc,TBB_demo,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)
+SxxGRth = Sxx_GR_th(alpha,f,Tstage,Tc,TBB_demo,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)
+
+p4.axhline(y=Sxx0,color='limegreen',label=r'$S_{xx,0}$')
+#p4.plot(Pinc_demo,Sxxtot,'r-',label=r'$S_{xx}$ total')
+p4.plot(Pinc_demo,SxxGphoton,'b-',label='photon generation')
+p4.plot(Pinc_demo,SxxRphoton,'b--',label='photon recombination')
+p4.plot(Pinc_demo,SxxGRth,'m-',label='thermal G-R')
+p4.legend(loc='upper left',fontsize=8)
+p4.set_ylim([0,8e-17])
+p3.set_xlim([0,0.08])
 
 f5.suptitle('Evap devices combined optical data')
+
+#%%
+alpha = 0.73*u.dimensionless_unscaled
+f = 245*u.MHz
+Tstage = 0.215*u.K
+Tc = 1.39*u.K
+V = 76*np.power(u.micron,3)#38*1.5*.8*np.power(u.micron,3)
+n_star = 1318*(np.power(u.micron,-3))
+tau_max = 35*u.microsecond
+eta_pb = 0.57
+nu_opt = (350*u.micron).to(u.GHz,equivalencies=u.spectral())
+trans=1
+eta_opt = 0.17*u.dimensionless_unscaled
+N0=1.72e10*np.power(u.micron,-3)*np.power(u.eV,-1)
+
+TBB_demo = np.linspace(0.1,20,num=20)*u.K
+Pinc_demo = TBB_to_Pinc(TBB_demo)
+
+darkmeas = SxxLTD.min()
+Sxx0 = 1.32e-17*np.power(u.Hz,-1)#darkmeas-Sxx(alpha,f,Tstage,Tc,0,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)
+
+Sxxtot = Sxx(alpha,f,Tstage,Tc,TBB_demo,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)+Sxx0
+SxxGphoton = Sxx_G_photon(alpha,f,Tstage,Tc,TBB_demo,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)
+SxxRphoton = Sxx_R_photon(alpha,f,Tstage,Tc,TBB_demo,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)
+SxxGRth = Sxx_GR_th(alpha,f,Tstage,Tc,TBB_demo,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)
+
+fdemo = plt.figure(-1)
+pdemo = fdemo.add_subplot(111)
+#pdemo.errorbar(PincLTD.value,SxxLTD.value,yerr=Sxxsig,fmt='s',markerfacecolor='w',markeredgecolor='k',ecolor='k',label='data')
+pdemo.axhline(y=Sxx0.value,color='limegreen',label=r'$S_{xx,0}$')
+pdemo.plot(Pinc_demo,Sxxtot,'r-',label=r'$S_{xx}$ total')
+pdemo.plot(Pinc_demo,SxxGphoton,'b-',label=r'$S_{xx}$ photon generation')
+pdemo.plot(Pinc_demo,SxxRphoton,'b--',label=r'$S_{xx}$ photon recombination')
+pdemo.plot(Pinc_demo,SxxGRth,'m-',label=r'$S_{xx}$ thermal G-R')
+pdemo.legend(loc='center right',framealpha=0.5)
+#pdemo.set_xscale('log')
+pdemo.set_xlim([0,2.5])
+

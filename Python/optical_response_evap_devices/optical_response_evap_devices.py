@@ -189,17 +189,69 @@ p1.set_ylabel('df/f')
 p2.set_ylabel('amp sub Sxx (1/Hz)')
 p2.set_xlabel(r'$P_{inc}$ (pW)')
 #p2.set_xlim([-.05,0.5])
-p1.legend(handles=p2.get_legend_handles_labels()[0],labels=p2.get_legend_handles_labels()[1],loc='lower left',ncol=1,fontsize=10)
+p1.legend(handles=p2.get_legend_handles_labels()[0],labels=p2.get_legend_handles_labels()[1],loc='upper right',ncol=1,fontsize=10)
 #p2.legend(loc='lower right',fontsize=10)
+
 fig.suptitle('Optical tests: sputtered vs evap')
 
     
 #%%
 fn,(pn1,pn2)=plt.subplots(2,1,sharex=True,num='fit')
 #pn1.errorbar(cd012['Poptavg'].value,cd012['xavg'],yerr=cd012['xerr'],fmt='d',markersize=5.0,color='k')
-pn1.errorbar(xPtofit[1],xPtofit[2],yerr=xPtofit[3],fmt='d',markersize=5.0,color='k')
-pn2.errorbar(sxxtofit[1],sxxtofit[2],yerr=sxxtofit[3],fmt='d',markersize=5.0,color='k')
+pn1.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+pn1.set_ylabel('df/f')
+pn2.set_ylabel('amp sub Sxx (1/Hz)')
+pn2.set_xlabel(r'$P_{inc}$ (pW)')
+pn2.set_xlim([0,.5])
 
+pn1.errorbar(xPtofit[1],xPtofit[2],yerr=xPtofit[3],fmt='d',markersize=5.0,color='b')
+pn2.errorbar(sxxtofit[1],sxxtofit[2],yerr=sxxtofit[3],fmt='d',markersize=5.0,color='b',label='evap devices')
+
+pn1.axvline(x=0.12,linestyle=':',color='m')
+pn1.axvline(x=0.2,linestyle=':',color='m')
+pn2.axvline(x=0.12,linestyle=':',color='m')
+pn2.axvline(x=0.2,linestyle=':',color='m')
+
+inx = np.argsort(xPtofit[1])
+xPtofit = [xPtofit[k][inx] for k in np.arange(len(xPtofit))]
+inx2 = np.argsort(sxxtofit[1])
+sxxtofit = [sxxtofit[k][inx2] for k in np.arange(len(sxxtofit))]
+
+i1 = np.max(np.where(xPtofit[1]<0.1))
+i2 = np.min(np.where(xPtofit[1]>0.2))
+pn1.plot(xPtofit[1][i1],xPtofit[2][i1],'*',color='navy',markersize=10)
+pn1.plot(xPtofit[1][i2],xPtofit[2][i2],'*',color='navy',markersize=10)
+
+R_est = ((xPtofit[2][i2]-xPtofit[2][i1])/(u.pW*(xPtofit[1][i2]-xPtofit[1][i1]))).to(np.power(u.W,-1))
+
+pn1.plot(Pinc2LTD[1],x2LTD[1],'ko',markersize=5)
+pn1.plot(Pinc2LTD[0],x2LTD[0],'ko',markersize=5)
+
+R_LTD = ((x2LTD[0]-x2LTD[1])/((Pinc2LTD[0]-Pinc2LTD[1]))).to(np.power(u.W,-1))
+
+i3 = np.max(np.where(sxxtofit[1]<0.1))
+i4 = np.min(np.where(sxxtofit[1]>0.2))
+pn2.plot(sxxtofit[1][i3],sxxtofit[2][i3],'*',color='navy',markersize=10)
+pn2.plot(sxxtofit[1][i4],sxxtofit[2][i4],'*',color='navy',markersize=10)
+
+sxx_avg = np.power(u.Hz,-1)*(sxxtofit[2][i3]+sxxtofit[2][i4])/2
+#pn2.plot((sxxtofit[1][i3]+sxxtofit[1][i4])/2,sxx_avg,'x',color='b',markersize=10)
+pn2.axhline(y=sxx_avg.value,color='b',linestyle='--')
+
+pn2.plot(PincLTD[1],SxxLTD[1],'ko',markersize=5)
+pn2.plot(PincLTD[2],SxxLTD[2],'ko',markersize=5)
+
+sxxLTD_avg = np.power(u.Hz,-1)*(SxxLTD[1]+SxxLTD[2])/2
+#pn2.plot((PincLTD[1]+PincLTD[2])/2,sxxLTD_avg,'kx',markersize=8)
+pn2.axhline(y=sxxLTD_avg.value,color='k',linestyle='--')
+
+NEP_est = (np.sqrt(sxx_avg)/R_est).to(u.W*np.power(u.Hz,-.5))
+NEP_LTD = (np.sqrt(sxxLTD_avg)/R_LTD).to(u.W*np.power(u.Hz,-.5))
+
+NEP_dark = (np.sqrt(sxxtofit[2][0]*np.power(u.Hz,-1))/(xPtofit[2][i1]/(xPtofit[1][i1]*u.pW))).to(u.W*np.power(u.Hz,-.5))
+NEP_LTD_dark = (np.sqrt(SxxLTD[0]*np.power(u.Hz,-1))/(x2LTD[0]/(Pinc2LTD[0]))).to(u.W*np.power(u.Hz,-.5))
+#txt="Blue diamonds are combined data from the evaporated devices (cooldowns 10,11,12,13) "
+#plt.figtext(0.5, 0.01, txt, wrap=True, horizontalalignment='center', fontsize=12)
 #%%
 #np.savetxt('comb_evap_x_vs_Pinc.txt',np.transpose(xPtofit[1:4]),header='Popt,x=df/f,xsigma')
 #np.savetxt('comb_evap_Sxx_vs_Pinc.txt',np.transpose(sxxtofit[1:4]),header='Popt,Sxx (1/Hz),Sxxsigma')

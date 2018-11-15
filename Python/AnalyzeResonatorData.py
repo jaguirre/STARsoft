@@ -38,15 +38,19 @@ def gaincal(resdict,Qignore=10**3,poly_order=5):
     # Now apply the gain calibrations to the fine + med + rough scans
     types = ['fine','med','rough']
     for t in types:
-        amp_cal = np.polyval(amp_poly,resdict[t]['freqs']) # plug in the amp gain polynomial fit for the relevant frequency range
-        phi_cal = np.polyval(cable_lin,resdict[t]['freqs']) # plug in the cable delay [linear] fit for the relevant frequency range
-        resdict[t]['cal S21'] = resdict[t]['raw S21']*np.exp(-1j*phi_cal)/amp_cal # make the corrections for this cal scan type
+        try:
+            amp_cal = np.polyval(amp_poly,resdict[t]['freqs']) # plug in the amp gain polynomial fit for the relevant frequency range
+            phi_cal = np.polyval(cable_lin,resdict[t]['freqs']) # plug in the cable delay [linear] fit for the relevant frequency range
+            resdict[t]['cal S21'] = resdict[t]['raw S21']*np.exp(-1j*phi_cal)/amp_cal # make the corrections for this cal scan type
+        except KeyError: exit
     
     # Apply the gain calibration to the noise timestream
-    amp_cal_noise = np.polyval(amp_poly,resdict['stream']['freq']) # plug in the amp gain polynomial fit for the relevant frequency point
-    phi_cal_noise = np.polyval(cable_lin,resdict['stream']['freq']) # plug in the cable delay [linear] fit for the relevant frequency point
-    resdict['stream']['cal S21'] = resdict['stream']['raw S21']*np.exp(-1j*phi_cal_noise)/amp_cal_noise # correct the noise stream
-        
+    try:
+        amp_cal_noise = np.polyval(amp_poly,resdict['stream']['freq']) # plug in the amp gain polynomial fit for the relevant frequency point
+        phi_cal_noise = np.polyval(cable_lin,resdict['stream']['freq']) # plug in the cable delay [linear] fit for the relevant frequency point
+        resdict['stream']['cal S21'] = resdict['stream']['raw S21']*np.exp(-1j*phi_cal_noise)/amp_cal_noise # correct the noise stream
+    except KeyError: exit
+
 #%%
 # From https://gist.github.com/lorenzoriano/6799568
 def calc_R(x,y, xc, yc):
@@ -123,7 +127,7 @@ def streamcal(resdict):
     except KeyError: 
         m = (np.diff(abs(calI+1j*calQ)))/(np.diff(freqs))
         maxm = np.max(np.abs(m))
-        f00 = freqs[(np.where(abs(m)==maxm)[0]+1)]
+        f00 = freqs[(np.where(abs(m)==maxm)[0]+1)][0]
     
     ind = np.where(freqs==f00)[0] 
     if ind.size==0: ind = np.max(np.where(freqs<f00)) # not sure if the mixer always chooses an exact point or not

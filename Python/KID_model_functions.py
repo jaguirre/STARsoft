@@ -517,3 +517,83 @@ def Sxx(alpha,f,Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans=1,N0
     
     return S_xx
 
+#%%
+def Sxx_G_photon(alpha,f,Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans=1,N0=N0_Al):
+    # Calculate the gap energy 
+    delta = delta0(Tc)
+
+    # Calculate the incident and absorbed powers
+    P_inc = TBB_to_Pinc(T_BB,trans)
+    P_abs = eta_opt*P_inc
+
+    # Calculate the effective electron temperature
+    T_elec = Telec(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans,N0)
+    
+    # Calculate S2 using the effective electron temperature rather than the physical temperature
+    S_2 = S2(T_elec,f,Tc)
+    
+    # Calculate the photon occupation number
+    n_gamma = ngamma(nu_opt,T_BB)
+    
+    # Calculate the total quasiparticle number density
+    n_qp = nqp(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans)
+    
+    # Calculate the quasiparticle lifetime in the material
+    tau_qp = tauqp(n_qp,n_star,tau_max)
+
+    S_xx_G_photon = np.power(alpha*S_2/(4*N0*delta),2) * np.power(eta_pb*tau_qp/(delta*V),2) * (2*c.h*nu_opt*P_abs)*(1+n_gamma)
+
+    return S_xx_G_photon.to(np.power(u.Hz,-1))
+
+#%%
+def Sxx_R_photon(alpha,f,Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans=1,N0=N0_Al):
+    # Calculate the gap energy 
+    delta = delta0(Tc)
+
+    # Calculate the incident and absorbed powers
+    P_inc = TBB_to_Pinc(T_BB,trans)
+    P_abs = eta_opt*P_inc
+
+    # Calculate the effective electron temperature
+    T_elec = Telec(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans,N0)
+    
+    # Calculate S2 using the effective electron temperature rather than the physical temperature
+    S_2 = S2(T_elec,f,Tc)
+    
+    # Calculate the photon occupation number
+    n_gamma = ngamma(nu_opt,T_BB)
+    
+    # Calculate the total quasiparticle number density
+    n_qp = nqp(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans)
+    
+    # Calculate the quasiparticle lifetime in the material
+    tau_qp = tauqp(n_qp,n_star,tau_max)
+
+    S_xx_R_photon = np.power(alpha*S_2/(4*N0*delta),2) * np.power(eta_pb*tau_qp/(delta*V),2) * 4*P_abs*delta/eta_pb
+
+    return S_xx_R_photon.to(np.power(u.Hz,-1))
+    
+#%%
+def Sxx_GR_th(alpha,f,Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans=1,N0=N0_Al):
+    delta = delta0(Tc)
+
+    # Calculate the effective electron temperature
+    T_elec = Telec(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans,N0)
+    
+    # Calculate S2 using the effective electron temperature rather than the physical temperature
+    S_2 = S2(T_elec,f,Tc)
+        
+    # Calculate the total quasiparticle number density
+    n_qp = nqp(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans)
+    
+    # Calculate the quasiparticle lifetime in the material
+    tau_qp = tauqp(n_qp,n_star,tau_max)
+
+    # Calculate the thermal quasiparticle generation rate 
+    gamma_th = gammath(Tstage,Tc,V,n_star,tau_max)
+    
+    S_xx_GR_th = np.power(alpha*S_2/(4*N0*delta),2) * np.power(2*tau_qp/V,2) * gamma_th
+    
+    return S_xx_GR_th.to(np.power(u.Hz,-1))
+    
+    
