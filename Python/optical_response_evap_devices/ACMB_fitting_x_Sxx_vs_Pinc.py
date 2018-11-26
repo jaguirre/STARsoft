@@ -145,7 +145,7 @@ opt_data = np.concatenate((x2_interp,Sxx_interp))
 opt_sigma = np.concatenate((x2sig,Sxxsig))
 #opt_p0 =(n_star.value,tau_max.value,eta_opt,(x2test[1]/f).value,(Sxx_interp[0]/2).value)
 opt_p0 =(Sxxfitopt[0],Sxxfitopt[1],0.8,(x2test[1]/f).value,Sxx_interp[0].value)
-opt_bounds = ([10,0,0,-1,0.5*Sxx_interp[0].value],[1000,1e5,1,1,(Sxx_interp[0]).value])
+opt_bounds = ([10,0,0,-1,0.5*Sxx_interp[0].value],[1500,1e5,1,1,(Sxx_interp[0]).value])
 #opt_bounds = ([0,0,0,(min(x2_interp)/f).value,0],[np.inf,1e5,1,-(min(x2_interp)/f).value,(Sxx_interp[0]).value])
 opt_fitopt,opt_fitcov = curve_fit(fitkids.x_Sxx_opt_simulfit,[xdata,sxxdata],opt_data,sigma=opt_sigma,p0=opt_p0,bounds=opt_bounds)
 

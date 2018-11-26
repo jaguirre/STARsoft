@@ -134,7 +134,7 @@ def x_opt_fit(data,n_star,tau_max,eta_opt,df):
     Output -- S_xx: fractional frequency noise (in Hz^-1 but unitless because scipy.optimize.curve_fit doesn't like units)
 '''
 
-def Sxx_fit(data,n_star,tau_max,eta_opt,Sxx_0):
+def Sxx_opt_fit(data,n_star,tau_max,eta_opt,Sxx_0):
     # Unpack the input parameter
     T_BB,alpha,f,Tstage,Tc,V,eta_pb,nu_opt,trans,N0 = data
     
@@ -169,7 +169,7 @@ def Sxx_fit(data,n_star,tau_max,eta_opt,Sxx_0):
 def x_Sxx_opt_simulfit(data,n_star,tau_max,eta_opt,df,Sxx_0):
     # Calculate x_opt and Sxx separately using their fit functions
     x_opt = x_opt_fit(data[0],n_star,tau_max,eta_opt,df)
-    S_xx_tot = Sxx_fit(data[1],n_star,tau_max,eta_opt,Sxx_0)
+    S_xx_tot = Sxx_opt_fit(data[1],n_star,tau_max,eta_opt,Sxx_0)
     
     # Mash them together so the fitter can return a 1D vector
     glom = np.concatenate((x_opt,S_xx_tot))
