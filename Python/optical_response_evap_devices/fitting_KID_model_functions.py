@@ -146,6 +146,35 @@ def Sxx_opt_fit(data,n_star,tau_max,eta_opt,Sxx_0):
     return S_xx_tot
 
 #%%
+''' Function specifically to fit Sxx vs T_stage
+    Inputs -- data: data[0] = Tstage: Stage temperature in K (should be an array)
+                    data[1] = alpha: kinetic inductance fraction of the inductor (unitless)
+                    data[2] = f: KID pixel *Resonance Frequency* in MHz or similar
+                    data[3] = T_BB: Blackbody temperature in K (should be scalar)
+                    data[4] = Tc: Critical temperature of the superconductor in K
+                    data[5] = V: optically-active volume of the KID pixel in microns^3
+                    data[6] = eta_pb: pair breaking efficiency in the superconductor (unitless)
+                    data[7] = nu_opt: frequency of optical photons (in Hz or similar)
+                    data[8] = trans: transmission of a blocking filter (unitless); trans=0 gives nqp=nth
+                    data[9] =  N0: Density of states for the superconductor material (default is thin-film Al value)
+              n_star: quasiparticle number constant in microns^-3
+              tau_max: quasiparticle lifetime constant in microseconds
+              eta_opt: optical efficiency *of the detector* (unitless)
+              Sxx_0: Extra constant to account for noise from unknown sources in Hz^-1 but unitless because scipy.optimize.curve_fit doesn't like units
+    Output -- S_xx: fractional frequency noise (in Hz^-1 but unitless because scipy.optimize.curve_fit doesn't like units)
+'''
+
+def Sxx_dark_fit(data,n_star,tau_max,eta_opt,Sxx_0):
+    # Unpack the input parameter
+    Tstage,alpha,f,T_BB,Tc,V,eta_pb,nu_opt,trans,N0 = data
+    
+    # Calculate Sxx
+    S_xx = kids.Sxx(alpha,f,Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,nu_opt,eta_opt,trans,N0)
+    S_xx_tot = (S_xx + Sxx_0*(np.power(u.Hz,-1))).to(np.power(u.Hz,-1))
+    S_xx_tot = S_xx_tot.value
+    
+    return S_xx_tot
+#%%
 ''' Dummy function to simultaneously fit x_opt and Sxx as a function of TBB
     Inputs -- data: data[0] = T_BB: Blackbody temperature in K (should be an array)
                     data[1] = alpha: kinetic inductance fraction of the inductor (unitless)
@@ -168,10 +197,47 @@ def Sxx_opt_fit(data,n_star,tau_max,eta_opt,Sxx_0):
 '''
 def x_Sxx_opt_simulfit(data,n_star,tau_max,eta_opt,df,Sxx_0):
     # Calculate x_opt and Sxx separately using their fit functions
-    x_opt = x_opt_fit(data[0],n_star,tau_max,eta_opt,df)
-    S_xx_tot = Sxx_opt_fit(data[1],n_star,tau_max,eta_opt,Sxx_0)
+    x_opt = x_opt_fit(data,n_star,tau_max,eta_opt,df)
+    S_xx_tot = Sxx_opt_fit(data,n_star,tau_max,eta_opt,Sxx_0)
     
     # Mash them together so the fitter can return a 1D vector
     glom = np.concatenate((x_opt,S_xx_tot))
+    
+    return glom
+
+#%%
+''' Dummy function to simultaneously fit x_opt and Sxx as a function of TBB
+    Inputs -- data: data[0] = [T_BB_xOpt,T_BB_SxxOpt,T_stage_dark]: Blackbody temperature in K (should be an array)
+                    data[1] = alpha: kinetic inductance fraction of the inductor (unitless)
+                    data[2] = f: KID pixel *Resonance Frequency* in MHz or similar
+                    data[3] = Tstage: Stage temperature in K (should be scalar)
+                    data[4] = Tc: Critical temperature of the superconductor in K
+                    data[5] = V: optically-active volume of the KID pixel in microns^3
+                    data[6] = eta_pb: pair breaking efficiency in the superconductor (unitless)
+                    data[7] = nu_opt: frequency of optical photons (in Hz or similar)
+                    data[8] = trans: transmission of a blocking filter (unitless); trans=0 gives nqp=nth
+                    data[9] =  N0: Density of states for the superconductor material (default is thin-film Al value)
+              n_star: quasiparticle number constant in microns^-3
+              tau_max: quasiparticle lifetime constant in microseconds
+              eta_opt: optical efficiency *of the detector* (unitless)
+              df: nuisance parameter to account for the fact that we can't measure at zero temperature and optical loading. 
+                 *** df is in units inverse to f, but needs to be given as unitless for the fitter ***
+                 x_tot = x_MB + df/f = x_MB + dx -> dx = f*df
+              Sxx_0: Extra constant to account for noise from unknown sources in Hz^-1 but unitless because scipy.optimize.curve_fit doesn't like unit
+    Output -- glom: concatenation of x_opt and S_xx values (should always be of equal length)
+'''
+def x_Sxx_dark_opt_simulfit(data,n_star,tau_max,eta_opt,df,Sxx_0_Opt,Sxx_0_dark):
+    T_BB_xOpt,T_BB_SxxOpt,T_stage_dark = data[0]
+    
+    data0,alpha,f,Tstage0,Tc,V,eta_pb,nu_opt,trans,N0 = data
+    
+    data_dark = [data[0][2],alpha,f,5*u.K,Tc,V,eta_pb,nu_opt,trans,N0]
+    
+    # Calculate x_opt and Sxx separately using their fit functions
+    x_opt = x_opt_fit([data[0][0],*data[1:10]],n_star,tau_max,eta_opt,df)
+    S_xx_Opt = Sxx_opt_fit([data[0][1],*data[1:10]],n_star,tau_max,eta_opt,Sxx_0_Opt)
+    S_xx_dark = Sxx_dark_fit(data_dark,n_star,tau_max,eta_opt,Sxx_0_dark)
+    # Mash them together so the fitter can return a 1D vector
+    glom = np.concatenate((x_opt,S_xx_Opt,S_xx_dark))
     
     return glom
