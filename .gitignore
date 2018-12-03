@@ -2,3 +2,9 @@
 *.*~
 *~
 *.png
+*.ipynb_checkpoints
+*.ipynb_checkpoints/*
+Python/.ipynb_checkpoints
+Python/.ipynb_checkpoints/*
+Python/Simulation/.ipynb_checkpoints
+Python/Simulation/.ipynb_checkpoints/*
