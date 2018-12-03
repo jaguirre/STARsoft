@@ -149,10 +149,10 @@ def nqp(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans=1):
     if not hasattr(V,'unit'): V = V*np.power(u.micron,3)
     V = V.to(np.power(u.micron,3))
     
-    if not hasattr(tau_max,'unit'): tau_max*=u.microsecond
+    if not hasattr(tau_max,'unit') or tau_max.unit==u.dimensionless_unscaled: tau_max*=u.microsecond
     tau_max = tau_max.to(u.microsecond)
     
-    if not hasattr(n_star,'unit'): n_star*=np.power(u.micron,-3)
+    if not hasattr(n_star,'unit') or n_star.unit==u.dimensionless_unscaled: n_star*=np.power(u.micron,-3)
     n_star = n_star.to(np.power(u.micron,-3))
     
     eta_pb*=u.dimensionless_unscaled
