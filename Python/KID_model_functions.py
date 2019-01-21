@@ -17,6 +17,8 @@ module_path = os.path.dirname(path)+os.sep
 # It's set as default for all these functions so changing it here should change it everywhere.
 N0_Al = 1.72e10*np.power(u.micron,-3)*np.power(u.eV,-1) 
 
+# Electron-phonon interaction time in Al, from Kaplan++ 1976
+tau_0_Al = 438e-9*u.second
 
 #%%
 ''' Function to calculate the superconducting band gap delta0 as a function of critical temperature Tc 
@@ -54,6 +56,31 @@ def ngamma(nu_opt,T_BB):
     # Calculate n_gamma
     n_gamma = np.power(np.exp(ex)-1,-1)
     return n_gamma
+
+#%%
+''' Function to calculate n_star, based on the electron-phonon interaction time and recombination constant
+     Inputs -- tau_max: quasiparticle lifetime constant in microseconds
+               Tc: Critical temperature of the superconductor in K
+               tau_0: electron-phonon interaction time in seconds (default is reference value for Al)
+               N0: Density of states for the superconductor material (default is thin-film Al value)
+    Outputs -- quasiparticle number constant in microns^-3
+'''
+def nstar(tau_max,Tc,tau_0=tau_0_Al,N0=N0_Al):
+    # Get our units in order
+    if not hasattr(Tc,'unit'): Tc = Tc*u.K
+    Tc = Tc.to(u.K)
+    
+    if not hasattr(tau_max,'unit') or tau_max.unit==u.dimensionless_unscaled: tau_max*=u.microsecond
+    tau_max = tau_max.to(u.microsecond)
+
+    # Calculate gap energy for the material
+    delta = delta0(Tc)
+
+    R2 = np.power(2*delta,2)/(2*N0*tau_0*np.power(c.k_B*Tc,3))
+    
+    nstar = np.power(R2*tau_max,-1).to(np.power(u.micron,-3))
+    
+    return nstar
 
 #%%
 filt_k,filt_t = np.loadtxt(module_path+'BandpassFilter.txt',skiprows=1,delimiter=',',unpack=True) # annoying, but gotta keep BandpassFilter.txt accessible
@@ -428,6 +455,42 @@ def xMB(alpha,f,Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans=1,N0=N0_Al)
     
     return x_MB
 
+#%%
+''' Function to calculate the responsivity*optical efficiency
+    of a resonator under a given set of thermal & optical conditions
+    Inputs -- alpha: kinetic inductance fraction of the inductor (unitless)
+              f: KID pixel *Resonance Frequency* in MHz or similar
+              Tstage: Stage temperature in K (can be an array)
+              Tc: Critical temperature of the superconductor in K
+              T_BB: Blackbody temperature in K (can be an array)
+              V: optically-active volume of the KID pixel in microns^3
+              n_star: quasiparticle number constant in microns^-3
+              tau_max: quasiparticle lifetime constant in microseconds
+              eta_pb: pair breaking efficiency in the superconductor (unitless)
+              eta_opt: optical efficiency *of the detector* (unitless)
+              trans: transmission of a blocking filter (unitless); trans=0 gives nqp=nth
+              N0: Density of states for the superconductor material (default is thin-film Al value)
+    Output -- x_MB: fractional freq shift relative to the T = nqp = 0 state (unitless)
+'''
+
+def dxdPabs(alpha,f,Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans=1,N0=N0_Al):
+    # Calculate the gap energy
+    delta = delta0(Tc)
+    
+    # Calculate the number density of quasiparticles
+    n_qp = nqp(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans)
+    
+    # Calculate the quasiparticle lifetime in the material
+    tau_qp = tauqp(n_qp,n_star,tau_max)
+    
+    # Calculate the electron temperature in the material
+    T_elec = Telec(Tstage,Tc,T_BB,V,n_star,tau_max,eta_pb,eta_opt,trans,N0)
+    
+    # Calculate the fractional frequency shift, using T_elec to calculate S2 instead of the physical temperature
+    dx_dPabs = eta_opt*((alpha*S2(T_elec,f,Tc))/(4*N0*delta))*((eta_pb*tau_qp)/(delta*V))
+    dx_dPabs = dx_dPabs.to(np.power(u.W,-1))
+    
+    return dx_dPabs
     
 #%%
 ''' Function to calculate 1/Q_MB of a resonator under a given set of thermal & optical conditions
